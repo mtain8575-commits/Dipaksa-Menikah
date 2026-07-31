@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
 
 st.set_page_config(
     page_title="Dashboard Produksi - Dipaksa Menikah",
@@ -19,12 +20,24 @@ def load_data(file_path):
     data_dict = {}
     for sheet in xls.sheet_names:
         df = pd.read_excel(file_path, sheet_name=sheet, skiprows=2)
+        # Pastikan ada kolom Status/Take untuk sinkronisasi
+        if 'Status' not in df.columns:
+            df['Status'] = False
         data_dict[sheet] = df
     return data_dict
 
 try:
-    sheets_data = load_data(excel_file)
-    
+    # Load data
+    xls = pd.ExcelFile(excel_file)
+    sheets_data = {}
+    for sheet in xls.sheet_names:
+        df = pd.read_excel(excel_file, sheet_name=sheet, skiprows=2)
+        if 'Status' not in df.columns:
+            df['Status'] = False
+        # Ubah tipe data status ke boolean
+        df['Status'] = df['Status'].fillna(False).astype(bool)
+        sheets_data[sheet] = df
+
     # Sidebar Navigasi & Kontrol
     st.sidebar.header("⚙️ Navigasi & Kontrol")
     selected_day = st.sidebar.selectbox("Pilih Hari Syuting", list(sheets_data.keys()))
@@ -35,31 +48,15 @@ try:
     
     df_selected = sheets_data[selected_day].copy()
     df_scenes = df_selected.dropna(subset=['Scene'])
-    
-    # Inisialisasi Session State untuk checkbox
-    if 'taken_status' not in st.session_state:
-        st.session_state.taken_status = {}
-        
-    for sheet in sheets_data.keys():
-        if sheet not in st.session_state.taken_status:
-            sub_df = sheets_data[sheet].dropna(subset=['Scene'])
-            st.session_state.taken_status[sheet] = {str(row['Scene']): False for _, row in sub_df.iterrows()}
 
-    # Hitung Statistik Monitor
+    # Hitung Statistik Monitor Berdasarkan Data Excel
     total_scenes = len(df_scenes)
-    taken_count = sum(1 for sc in df_scenes['Scene'] if st.session_state.taken_status[selected_day].get(str(sc), False))
+    taken_count = int(df_scenes['Status'].sum()) if 'Status' in df_scenes.columns else 0
     remaining_count = total_scenes - taken_count
     completion_pct = int((taken_count / total_scenes) * 100) if total_scenes > 0 else 0
     untaken_pct = 100 - completion_pct
 
-    # --- LOGIKA ACUAN WAKTU & TARGET PIMPRO ---
-    # Asumsi Acuan Waktu Operasional Syuting per Hari:
-    # Sesi 1: 08.00 - 12.00 (On Cam Pagi)
-    # Ishoma 1: 12.00 - 13.00
-    # Sesi 2: 13.01 - 18.00 (Siang - Sore)
-    # Ishoma 2: 18.00 - 19.00 (atau menyesuaikan MTM/Rehat)
-    # Sesi 3/Malam: 19.01 - 24.00 (Batas Maksimal Syuting Jam 24.00)
-    
+    # Waktu Operasional untuk Pimpro
     current_hour = datetime.datetime.now().hour
     current_minute = datetime.datetime.now().minute
     current_time_val = current_hour + (current_minute / 60.0)
@@ -74,13 +71,10 @@ try:
         st.metric(label="Sisa Belum Take", value=remaining_count, delta=f"-{remaining_count}" if remaining_count > 0 else "Selesai!", delta_color="inverse")
         
     # --- PENGINGAT / PERHATIAN OTOMATIS UNTUK PIMPRO ---
-    # Akan muncul langsung secara dinamis begitu ada adegan yang di-take, 
-    # dan memberikan perhatian khusus setelah Ishoma pertama (> jam 13.00) jika masih banyak yang belum take.
     st.markdown("---")
     if taken_count == 0:
         st.info("ℹ️ **Status Pimpinan Produksi (Pimpro):** Belum ada adegan yang dicentang selesai (Take). Silakan pantau eksekusi di set.")
     else:
-        # Cek apakah sudah lewat Ishoma pertama (>= jam 13:00)
         is_after_ishoma_1 = current_time_val >= 13.0
         
         if is_after_ishoma_1 and remaining_count > (total_scenes * 0.5):
@@ -92,22 +86,45 @@ try:
 
     st.markdown("---")
     
+    # Fungsi pembantu untuk menyimpan perubahan ke file Excel master
+    def update_excel_status(sheet_name, scene_val, new_status):
+        # Baca ulang file master excel untuk menghindari konflik
+        book = pd.ExcelFile(excel_file)
+        writer_dfs = {}
+        for s in book.sheet_names:
+            temp_df = pd.read_excel(excel_file, sheet_name=s, skiprows=2)
+            if 'Status' not in temp_df.columns:
+                temp_df['Status'] = False
+            writer_dfs[s] = temp_df
+            
+        # Update baris yang sesuai
+        mask = writer_dfs[sheet_name]['Scene'].astype(str) == str(scene_val)
+        writer_dfs[sheet_name].loc[mask, 'Status'] = new_status
+        
+        # Simpan kembali ke file Excel asli
+        with pd.ExcelWriter(excel_file, engine='openpyxl', mode='w') as writer:
+            for s, df_to_write in writer_dfs.items():
+                # Tulis ulang dengan mempertahankan struktur baris awal (skiprows=2 ditangani saat baca, jadi kita tulis data mentahnya)
+                # Untuk keamanan, kita tulis kembali dataframe lengkap ke sheet
+                df_to_write.to_excel(writer, sheet_name=s, index=False, startrow=2)
+
     # JIKA MODE HP / RINGKAS DICENTANG DI SIDEBAR
     if mobile_mode:
-        st.info("📱 **Mode Ringkas HP Aktif:** Daftar scene vertikal untuk memudahkan Pimpro memantau langsung setiap 1 centang *take*.")
+        st.info("📱 **Mode Ringkas HP Aktif:** Setiap centang oleh Ast. Schedule/Pimpro akan langsung tersinkronisasi ke file master.")
         
         for idx, row in df_scenes.iterrows():
-            sc_key = str(row['Scene'])
-            is_taken = st.session_state.taken_status[selected_day].get(sc_key, False)
+            sc_val = row['Scene']
+            sc_key = str(sc_val)
+            is_taken = bool(row['Status'])
             
             c_m1, c_m2 = st.columns([1, 4])
             with c_m1:
                 new_chk = st.checkbox("Take", value=is_taken, key=f"mob_chk_{selected_day}_{sc_key}")
                 if new_chk != is_taken:
-                    st.session_state.taken_status[selected_day][sc_key] = new_chk
+                    update_excel_status(selected_day, sc_val, new_chk)
                     st.rerun()
             with c_m2:
-                st.write(f"**Sc. {row['Scene']}** | {row['N/D']} | *{row['SET']}*")
+                st.write(f"**Sc. {sc_val}** | {row['N/D']} | *{row['SET']}*")
             st.divider()
             
     else:
@@ -157,14 +174,15 @@ try:
                 st.markdown(f"<div style='background-color: #D9E1F2; color: #1F3864; padding: 8px; font-weight: bold; border-radius: 4px; margin-top: 10px;'>📁 {section_title}</div>", unsafe_allow_html=True)
                 continue
                 
-            sc_key = str(row['Scene'])
-            is_taken = st.session_state.taken_status[selected_day].get(sc_key, False)
+            sc_val = row['Scene']
+            sc_key = str(sc_val)
+            is_taken = bool(row['Status'])
             
             c1, c2, c3, c4, c5, c6, c7 = st.columns([0.8, 1, 1, 1.2, 3, 2.5, 3])
             with c1:
                 new_val = st.checkbox("Take", value=is_taken, key=f"chk_{selected_day}_{sc_key}", label_visibility="collapsed")
                 if new_val != is_taken:
-                    st.session_state.taken_status[selected_day][sc_key] = new_val
+                    update_excel_status(selected_day, sc_val, new_val)
                     st.rerun()
             with c2:
                 st.write(str(row['Scene']))
