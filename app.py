@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import io
+import datetime
 
 st.set_page_config(
     page_title="Dashboard Produksi - Dipaksa Menikah",
@@ -50,6 +50,19 @@ try:
     taken_count = sum(1 for sc in df_scenes['Scene'] if st.session_state.taken_status[selected_day].get(str(sc), False))
     remaining_count = total_scenes - taken_count
     completion_pct = int((taken_count / total_scenes) * 100) if total_scenes > 0 else 0
+    untaken_pct = 100 - completion_pct
+
+    # --- LOGIKA ACUAN WAKTU & TARGET PIMPRO ---
+    # Asumsi Acuan Waktu Operasional Syuting per Hari:
+    # Sesi 1: 08.00 - 12.00 (On Cam Pagi)
+    # Ishoma 1: 12.00 - 13.00
+    # Sesi 2: 13.01 - 18.00 (Siang - Sore)
+    # Ishoma 2: 18.00 - 19.00 (atau menyesuaikan MTM/Rehat)
+    # Sesi 3/Malam: 19.01 - 24.00 (Batas Maksimal Syuting Jam 24.00)
+    
+    current_hour = datetime.datetime.now().hour
+    current_minute = datetime.datetime.now().minute
+    current_time_val = current_hour + (current_minute / 60.0)
     
     # 3 Kolom KPI Monitor Utama (Tampil di Laptop & HP)
     col1, col2, col3 = st.columns(3)
@@ -60,23 +73,33 @@ try:
     with col3:
         st.metric(label="Sisa Belum Take", value=remaining_count, delta=f"-{remaining_count}" if remaining_count > 0 else "Selesai!", delta_color="inverse")
         
-    # Peringatan Manajemen Waktu untuk Pimpro
-    if remaining_count > (total_scenes * 0.6) and taken_count > 0:
-        st.warning("⚠️ **Perhatian Pimpro:** Sisa adegan masih banyak. Segera cek kendala di lapangan jika ritme syuting lambat.")
-    elif remaining_count == 0 and total_scenes > 0:
-        st.success("🎉 **Kerja Bagus!** Semua adegan hari ini sudah selesai diambil.")
+    # --- PENGINGAT / PERHATIAN OTOMATIS UNTUK PIMPRO ---
+    # Akan muncul langsung secara dinamis begitu ada adegan yang di-take, 
+    # dan memberikan perhatian khusus setelah Ishoma pertama (> jam 13.00) jika masih banyak yang belum take.
+    st.markdown("---")
+    if taken_count == 0:
+        st.info("ℹ️ **Status Pimpinan Produksi (Pimpro):** Belum ada adegan yang dicentang selesai (Take). Silakan pantau eksekusi di set.")
+    else:
+        # Cek apakah sudah lewat Ishoma pertama (>= jam 13:00)
+        is_after_ishoma_1 = current_time_val >= 13.0
+        
+        if is_after_ishoma_1 and remaining_count > (total_scenes * 0.5):
+            st.warning(f"⚠️ **PERHATIAN PIMPRO (Post-Ishoma 1):** Waktu telah melewati jam 13.00. Sisa scene yang **belum di-take masih {remaining_count} adegan ({untaken_pct}%)**. Mohon segera cek kendala di lapangan agar target selesai maksimal jam 24.00 tercapai!")
+        elif remaining_count == 0:
+            st.success("🎉 **Luar Biasa!** Seluruh target scene hari ini tuntas sepenuhnya.")
+        else:
+            st.info(f"📊 **Monitor Waktu & Target:** Progress berjalan {completion_pct}%. Sisa adegan belum take: **{remaining_count} scene ({untaken_pct}%)**.")
 
     st.markdown("---")
     
     # JIKA MODE HP / RINGKAS DICENTANG DI SIDEBAR
     if mobile_mode:
-        st.info("📱 **Mode Ringkas HP Aktif:** Menampilkan daftar scene vertikal untuk memudahkan Pimpro memantau kendala di lapangan secara cepat.")
+        st.info("📱 **Mode Ringkas HP Aktif:** Daftar scene vertikal untuk memudahkan Pimpro memantau langsung setiap 1 centang *take*.")
         
         for idx, row in df_scenes.iterrows():
             sc_key = str(row['Scene'])
             is_taken = st.session_state.taken_status[selected_day].get(sc_key, False)
             
-            # Tampilan list ringkas per scene
             c_m1, c_m2 = st.columns([1, 4])
             with c_m1:
                 new_chk = st.checkbox("Take", value=is_taken, key=f"mob_chk_{selected_day}_{sc_key}")
