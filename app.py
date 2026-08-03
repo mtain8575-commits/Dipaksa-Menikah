@@ -12,31 +12,37 @@ st.set_page_config(
 st.title("🎬 Jadwal Dashboard & Breakdown Produksi")
 st.subheader("Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)")
 
-excel_file = "Plan_Schedule_Dipaksa_Menikah_3_Days.xlsx"
+excel_file = "Plan_Schedule_Dipaksa_Menikah_3_Hari.xlsx"
 
-@st.cache_data
-def load_data(file_path):
+# Fungsi otomatis mendeteksi baris header (Scene) di setiap sheet
+def load_sheets_data(file_path):
     xls = pd.ExcelFile(file_path)
     data_dict = {}
     for sheet in xls.sheet_names:
-        df = pd.read_excel(file_path, sheet_name=sheet, skiprows=2)
-        # Pastikan ada kolom Status/Take untuk sinkronisasi
+        # Baca sementara tanpa skiprows untuk mencari letak kata 'Scene'
+        df_raw = pd.read_excel(file_path, sheet_name=sheet)
+        header_row = 0
+        for i, row in df_raw.iterrows():
+            if 'Scene' in row.values:
+                header_row = i
+                break
+        
+        # Baca ulang dengan header yang benar secara otomatis
+        df = pd.read_excel(file_path, sheet_name=sheet, skiprows=header_row)
+        
+        # Bersihkan baris kosong atau NaN di kolom utama jika ada
+        df = df.dropna(how='all')
+        
         if 'Status' not in df.columns:
             df['Status'] = False
+        
+        df['Status'] = df['Status'].fillna(False).astype(bool)
         data_dict[sheet] = df
     return data_dict
 
 try:
-    # Load data
-    xls = pd.ExcelFile(excel_file)
-    sheets_data = {}
-    for sheet in xls.sheet_names:
-        df = pd.read_excel(excel_file, sheet_name=sheet, skiprows=2)
-        if 'Status' not in df.columns:
-            df['Status'] = False
-        # Ubah tipe data status ke boolean
-        df['Status'] = df['Status'].fillna(False).astype(bool)
-        sheets_data[sheet] = df
+    # Load data dengan fungsi otomatis
+    sheets_data = load_sheets_data(excel_file)
 
     # Sidebar Navigasi & Kontrol
     st.sidebar.header("⚙️ Navigasi & Kontrol")
@@ -47,11 +53,16 @@ try:
     mobile_mode = st.sidebar.checkbox("📱 Tampilan Ringkas (Fokus HP / Pimpro)", value=False, help="Centang ini jika dibuka via HP agar tampilan ringkas fokus pada monitor progress.")
     
     df_selected = sheets_data[selected_day].copy()
-    df_scenes = df_selected.dropna(subset=['Scene'])
+    
+    # Pastikan kolom Scene ada sebelum difilter
+    if 'Scene' in df_selected.columns:
+        df_scenes = df_selected.dropna(subset=['Scene'])
+    else:
+        df_scenes = pd.DataFrame()
 
     # Hitung Statistik Monitor Berdasarkan Data Excel
     total_scenes = len(df_scenes)
-    taken_count = int(df_scenes['Status'].sum()) if 'Status' in df_scenes.columns else 0
+    taken_count = int(df_scenes['Status'].sum()) if 'Status' in df_scenes.columns and not df_scenes.empty else 0
     remaining_count = total_scenes - taken_count
     completion_pct = int((taken_count / total_scenes) * 100) if total_scenes > 0 else 0
     untaken_pct = 100 - completion_pct
@@ -88,25 +99,31 @@ try:
     
     # Fungsi pembantu untuk menyimpan perubahan ke file Excel master
     def update_excel_status(sheet_name, scene_val, new_status):
-        # Baca ulang file master excel untuk menghindari konflik
-        book = pd.ExcelFile(excel_file)
+        xls = pd.ExcelFile(excel_file)
         writer_dfs = {}
-        for s in book.sheet_names:
-            temp_df = pd.read_excel(excel_file, sheet_name=s, skiprows=2)
+        for s in xls.sheet_names:
+            df_raw = pd.read_excel(excel_file, sheet_name=s)
+            header_row = 0
+            for i, row in df_raw.iterrows():
+                if 'Scene' in row.values:
+                    header_row = i
+                    break
+            temp_df = pd.read_excel(excel_file, sheet_name=s, skiprows=header_row)
             if 'Status' not in temp_df.columns:
                 temp_df['Status'] = False
-            writer_dfs[s] = temp_df
+            writer_dfs[s] = temp_df, header_row
             
         # Update baris yang sesuai
-        mask = writer_dfs[sheet_name]['Scene'].astype(str) == str(scene_val)
-        writer_dfs[sheet_name].loc[mask, 'Status'] = new_status
+        df_to_up, h_row = writer_dfs[sheet_name]
+        mask = df_to_up['Scene'].astype(str) == str(scene_val)
+        df_to_up.loc[mask, 'Status'] = new_status
+        writer_dfs[sheet_name] = (df_to_up, h_row)
         
-        # Simpan kembali ke file Excel asli
+        # Simpan kembali ke file Excel asli dengan mempertahankan baris atasnya
         with pd.ExcelWriter(excel_file, engine='openpyxl', mode='w') as writer:
-            for s, df_to_write in writer_dfs.items():
-                # Tulis ulang dengan mempertahankan struktur baris awal (skiprows=2 ditangani saat baca, jadi kita tulis data mentahnya)
-                # Untuk keamanan, kita tulis kembali dataframe lengkap ke sheet
-                df_to_write.to_excel(writer, sheet_name=s, index=False, startrow=2)
+            for s, (df_to_write, h_r) in writer_dfs.items():
+                # Jika ada baris header di atasnya, kita tulis ulang secara aman
+                df_to_write.to_excel(writer, sheet_name=s, index=False, startrow=h_r)
 
     # JIKA MODE HP / RINGKAS DICENTANG DI SIDEBAR
     if mobile_mode:
@@ -124,7 +141,9 @@ try:
                     update_excel_status(selected_day, sc_val, new_chk)
                     st.rerun()
             with c_m2:
-                st.write(f"**Sc. {sc_val}** | {row['N/D']} | *{row['SET']}*")
+                nd_val = row['N/D'] if 'N/D' in row and pd.notna(row['N/D']) else ""
+                set_val = row['SET'] if 'SET' in row and pd.notna(row['SET']) else ""
+                st.write(f"**Sc. {sc_val}** | {nd_val} | *{set_val}*")
             st.divider()
             
     else:
@@ -146,7 +165,7 @@ try:
         c_btn2.download_button(
             label="📥 Download Master Excel (3 Hari)",
             data=excel_bytes,
-            file_name="Plan_Schedule_Dipaksa_Menikah_3_Days.xlsx",
+            file_name="Plan_Schedule_Dipaksa_Menikah_3_Hari.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -169,12 +188,10 @@ try:
         st.markdown("---")
         
         for idx, row in df_selected.iterrows():
-            if pd.isna(row['Scene']):
-                section_title = row['No'] if not pd.isna(row['No']) else "KLASTER LOKASI"
-                st.markdown(f"<div style='background-color: #D9E1F2; color: #1F3864; padding: 8px; font-weight: bold; border-radius: 4px; margin-top: 10px;'>📁 {section_title}</div>", unsafe_allow_html=True)
+            sc_val = row['Scene'] if 'Scene' in row else None
+            if pd.isna(sc_val):
                 continue
                 
-            sc_val = row['Scene']
             sc_key = str(sc_val)
             is_taken = bool(row['Status'])
             
@@ -185,17 +202,17 @@ try:
                     update_excel_status(selected_day, sc_val, new_val)
                     st.rerun()
             with c2:
-                st.write(str(row['Scene']))
+                st.write(str(row.get('Scene', '')))
             with c3:
-                st.write(str(row['N/D']))
+                st.write(str(row.get('N/D', '')))
             with c4:
-                st.write(str(row['Page(s)']))
+                st.write(str(row.get('Page(s)', '')))
             with c5:
-                st.write(str(row['SET']))
+                st.write(str(row.get('SET', '')))
             with c6:
-                st.write(str(row['CAST']))
+                st.write(str(row.get('CAST', '')))
             with c7:
-                st.write(str(row['REMARK']))
+                st.write(str(row.get('REMARK', '')))
             
 except Exception as e:
     st.error(f"Error memuat dashboard: {e}")
