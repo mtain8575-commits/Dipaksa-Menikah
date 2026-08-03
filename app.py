@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import openpyxl
 
 st.set_page_config(
     page_title="Monitoring Produksi MD Entertainment",
@@ -8,13 +9,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# 1. Judul Utama Baru
 st.title("🎬 Monitoring Produksi MD Entertainment")
 
 excel_file = "Database_Jadwal_Produksi.xlsx"
 
-# Fungsi otomatis mendeteksi letak kolom Scene
-@st.cache_data
+@st.cache_data(ttl=1)
 def load_sheets_data(file_path):
     xls = pd.ExcelFile(file_path)
     data_dict = {}
@@ -43,7 +42,6 @@ try:
     st.sidebar.header("⚙️ Navigasi & Kontrol")
     selected_day = st.sidebar.selectbox("Pilih Hari Syuting", list(sheets_data.keys()))
     
-    # 2. Subtitle Dinamis Mengikuti Pilihan Hari
     st.subheader(f"Serial: Dipaksa Menikah (Episode 1 - {selected_day})")
     
     st.sidebar.markdown("---")
@@ -53,7 +51,6 @@ try:
     
     if 'Scene' in df_selected.columns:
         df_scenes = df_selected.dropna(subset=['Scene'])
-        # Filter baris yang berupa kategori set agar tidak ikut terhitung sebagai scene kosong
         df_scenes = df_scenes[~df_scenes['Scene'].astype(str).str.contains('SET CATEGORY', case=False, na=False)]
     else:
         df_scenes = pd.DataFrame()
@@ -91,28 +88,37 @@ try:
     st.markdown("---")
     
     def update_excel_status(sheet_name, scene_val, new_status):
-        xls = pd.ExcelFile(excel_file)
-        writer_dfs = {}
-        for s in xls.sheet_names:
-            df_raw = pd.read_excel(excel_file, sheet_name=s, header=None)
-            header_row = 0
-            for i, row in df_raw.iterrows():
-                if 'Scene' in row.values:
-                    header_row = i
-                    break
-            temp_df = pd.read_excel(excel_file, sheet_name=s, header=header_row)
-            if 'Status' not in temp_df.columns:
-                temp_df['Status'] = False
-            writer_dfs[s] = temp_df, header_row
+        # Menggunakan openpyxl langsung secara aman untuk memperbarui sel Status
+        wb = openpyxl.load_workbook(excel_file)
+        if sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            # Cari kolom 'Scene' dan 'Status'
+            header_row_idx = 0
+            scene_col_idx = None
+            status_col_idx = None
             
-        df_to_up, h_row = writer_dfs[sheet_name]
-        mask = df_to_up['Scene'].astype(str) == str(scene_val)
-        df_to_up.loc[mask, 'Status'] = new_status
-        writer_dfs[sheet_name] = (df_to_up, h_row)
-        
-        with pd.ExcelWriter(excel_file, engine='openpyxl', mode='w') as writer:
-            for s, (df_to_write, h_r) in writer_dfs.items():
-                df_to_write.to_excel(writer, sheet_name=s, index=False, startrow=h_r)
+            for r_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+                if 'Scene' in row:
+                    header_row_idx = r_idx
+                    scene_col_idx = list(row).index('Scene') + 1
+                    if 'Status' in row:
+                        status_col_idx = list(row).index('Status') + 1
+                    break
+            
+            # Jika kolom Status belum ada di Excel, buat di kolom sebelah kanan
+            if not status_col_idx and header_row_idx:
+                status_col_idx = ws.max_column + 1
+                ws.cell(row=header_row_idx, column=status_col_idx, value='Status')
+            
+            # Cari baris scene yang sesuai dan update statusnya
+            if header_row_idx and scene_col_idx and status_col_idx:
+                for r_idx in range(header_row_idx + 1, ws.max_row + 1):
+                    val = ws.cell(row=r_idx, column=scene_col_idx).value
+                    if val is not None and str(val).strip() == str(scene_val).strip():
+                        ws.cell(row=r_idx, column=status_col_idx, value=bool(new_status))
+                        break
+            wb.save(excel_file)
+        st.cache_data.clear()
 
     if mobile_mode:
         st.info("📱 **Mode Ringkas HP Aktif:** Setiap centang akan langsung tersinkronisasi ke file master.")
@@ -151,7 +157,7 @@ try:
         c_btn2.download_button(
             label="📥 Download Master Excel (3 Hari)",
             data=excel_bytes,
-            file_name="Database_Schedule_Produksi.xlsx",
+            file_name="Database_Jadwal_Produksi.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -160,8 +166,8 @@ try:
             st.info("💡 Tip Cetak: Tekan **Ctrl + P** di keyboard Anda untuk mencetak atau menyimpan halaman ini sebagai PDF.")
 
         st.markdown("---")
-        # 3. Judul Rincian Tanpa Nama Hari Ganda
-        st.markdown("### 📋 Rincian Jadwal Syuting & Checklist")
+        st.markdown(f"### 📋 Rincian Jadwal Syuting & Checklist")
+        st.write("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
         
         h1, h2, h3, h4, h5, h6, h7 = st.columns([0.8, 1, 1, 1.2, 3, 2.5, 3])
         h1.markdown("**Status**")
@@ -173,16 +179,11 @@ try:
         h7.markdown("**Remark**")
         st.markdown("---")
         
-        # 4. Pengelompokan berdasarkan Kategori Set
-        current_category = ""
-        
         for idx, row in df_selected.iterrows():
             sc_val = row['Scene'] if 'Scene' in row else None
             
-            # Cek jika baris ini adalah baris kategori set
             if pd.notna(sc_val) and str(sc_val).startswith('SET CATEGORY'):
-                current_category = str(sc_val)
-                st.markdown(f"**🏷️ {current_category}**")
+                st.markdown(f"#### 🏷️ {sc_val}")
                 continue
                 
             if pd.isna(sc_val):
