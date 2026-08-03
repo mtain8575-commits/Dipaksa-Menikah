@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import os
 
 st.set_page_config(
     page_title="Dashboard Produksi - Dipaksa Menikah",
@@ -12,22 +11,31 @@ st.set_page_config(
 st.title("🎬 Jadwal Dashboard & Breakdown Produksi")
 st.subheader("Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)")
 
-excel_file = "Database_Schedule_Produksi.xlsx"
+excel_file = "Database_Jadwal_Produksi.xlsx"
 
-# Fungsi otomatis mendeteksi letak kolom Scene di setiap sheet
+# Fungsi otomatis mendeteksi letak kolom Scene yang lebih handal
+@st.cache_data
 def load_sheets_data(file_path):
     xls = pd.ExcelFile(file_path)
     data_dict = {}
     for sheet in xls.sheet_names:
-        df_raw = pd.read_excel(file_path, sheet_name=sheet)
+        df_raw = pd.read_excel(file_path, sheet_name=sheet, header=None)
         header_row = 0
         for i, row in df_raw.iterrows():
+            # Cek apakah ada sel yang persis bernilai 'Scene'
             if 'Scene' in row.values:
                 header_row = i
                 break
         
-        df = pd.read_excel(file_path, sheet_name=sheet, skiprows=header_row)
+        # Baca ulang excel menggunakan baris header yang ditemukan
+        df = pd.read_excel(file_path, sheet_name=sheet, header=header_row)
         df = df.dropna(how='all')
+        
+        # Pastikan kolom 'Scene' ada
+        if 'Scene' in df.columns:
+            # Buang baris kategori set jika ikut terbaca sebagai data scene
+            df = df[df['Scene'].notna()]
+            df = df[~df['Scene'].astype(str).str.contains('SET CATEGORY', case=False, na=False)]
         
         if 'Status' not in df.columns:
             df['Status'] = False
@@ -89,13 +97,13 @@ try:
         xls = pd.ExcelFile(excel_file)
         writer_dfs = {}
         for s in xls.sheet_names:
-            df_raw = pd.read_excel(excel_file, sheet_name=s)
+            df_raw = pd.read_excel(excel_file, sheet_name=s, header=None)
             header_row = 0
             for i, row in df_raw.iterrows():
                 if 'Scene' in row.values:
                     header_row = i
                     break
-            temp_df = pd.read_excel(excel_file, sheet_name=s, skiprows=header_row)
+            temp_df = pd.read_excel(excel_file, sheet_name=s, header=header_row)
             if 'Status' not in temp_df.columns:
                 temp_df['Status'] = False
             writer_dfs[s] = temp_df, header_row
@@ -146,7 +154,7 @@ try:
         c_btn2.download_button(
             label="📥 Download Master Excel (3 Hari)",
             data=excel_bytes,
-            file_name="Database_Schedule_Produksi.xlsx",
+            file_name="Database_Jadwal_Produksi.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -169,7 +177,7 @@ try:
         
         for idx, row in df_selected.iterrows():
             sc_val = row['Scene'] if 'Scene' in row else None
-            if pd.isna(sc_val):
+            if pd.isna(sc_val) or str(sc_val).startswith('SET CATEGORY'):
                 continue
                 
             sc_key = str(sc_val)
