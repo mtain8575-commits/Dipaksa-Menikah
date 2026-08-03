@@ -3,17 +3,17 @@ import pandas as pd
 import datetime
 
 st.set_page_config(
-    page_title="Dashboard Produksi - Dipaksa Menikah",
+    page_title="Monitoring Produksi MD Entertainment",
     page_icon="🎬",
     layout="wide"
 )
 
-st.title("🎬 Jadwal Dashboard & Breakdown Produksi")
-st.subheader("Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)")
+# 1. Judul Utama Baru
+st.title("🎬 Monitoring Produksi MD Entertainment")
 
-excel_file = "Database_Jadwal_Produksi.xlsx"
+excel_file = "Database_Schedule_Produksi.xlsx"
 
-# Fungsi otomatis mendeteksi letak kolom Scene yang lebih handal
+# Fungsi otomatis mendeteksi letak kolom Scene
 @st.cache_data
 def load_sheets_data(file_path):
     xls = pd.ExcelFile(file_path)
@@ -22,20 +22,12 @@ def load_sheets_data(file_path):
         df_raw = pd.read_excel(file_path, sheet_name=sheet, header=None)
         header_row = 0
         for i, row in df_raw.iterrows():
-            # Cek apakah ada sel yang persis bernilai 'Scene'
             if 'Scene' in row.values:
                 header_row = i
                 break
         
-        # Baca ulang excel menggunakan baris header yang ditemukan
         df = pd.read_excel(file_path, sheet_name=sheet, header=header_row)
         df = df.dropna(how='all')
-        
-        # Pastikan kolom 'Scene' ada
-        if 'Scene' in df.columns:
-            # Buang baris kategori set jika ikut terbaca sebagai data scene
-            df = df[df['Scene'].notna()]
-            df = df[~df['Scene'].astype(str).str.contains('SET CATEGORY', case=False, na=False)]
         
         if 'Status' not in df.columns:
             df['Status'] = False
@@ -51,6 +43,9 @@ try:
     st.sidebar.header("⚙️ Navigasi & Kontrol")
     selected_day = st.sidebar.selectbox("Pilih Hari Syuting", list(sheets_data.keys()))
     
+    # 2. Subtitle Dinamis Mengikuti Pilihan Hari
+    st.subheader(f"Serial: Dipaksa Menikah (Episode 1 - {selected_day})")
+    
     st.sidebar.markdown("---")
     mobile_mode = st.sidebar.checkbox("📱 Tampilan Ringkas (Fokus HP / Pimpro)", value=False, help="Centang ini jika dibuka via HP agar tampilan ringkas fokus pada monitor progress.")
     
@@ -58,6 +53,8 @@ try:
     
     if 'Scene' in df_selected.columns:
         df_scenes = df_selected.dropna(subset=['Scene'])
+        # Filter baris yang berupa kategori set agar tidak ikut terhitung sebagai scene kosong
+        df_scenes = df_scenes[~df_scenes['Scene'].astype(str).str.contains('SET CATEGORY', case=False, na=False)]
     else:
         df_scenes = pd.DataFrame()
 
@@ -154,7 +151,7 @@ try:
         c_btn2.download_button(
             label="📥 Download Master Excel (3 Hari)",
             data=excel_bytes,
-            file_name="Database_Jadwal_Produksi.xlsx",
+            file_name="Database_Schedule_Produksi.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -163,7 +160,8 @@ try:
             st.info("💡 Tip Cetak: Tekan **Ctrl + P** di keyboard Anda untuk mencetak atau menyimpan halaman ini sebagai PDF.")
 
         st.markdown("---")
-        st.markdown(f"### 📋 Rincian Jadwal Syuting & Checklist - {selected_day}")
+        # 3. Judul Rincian Tanpa Nama Hari Ganda
+        st.markdown("### 📋 Rincian Jadwal Syuting & Checklist")
         
         h1, h2, h3, h4, h5, h6, h7 = st.columns([0.8, 1, 1, 1.2, 3, 2.5, 3])
         h1.markdown("**Status**")
@@ -175,9 +173,19 @@ try:
         h7.markdown("**Remark**")
         st.markdown("---")
         
+        # 4. Pengelompokan berdasarkan Kategori Set
+        current_category = ""
+        
         for idx, row in df_selected.iterrows():
             sc_val = row['Scene'] if 'Scene' in row else None
-            if pd.isna(sc_val) or str(sc_val).startswith('SET CATEGORY'):
+            
+            # Cek jika baris ini adalah baris kategori set
+            if pd.notna(sc_val) and str(sc_val).startswith('SET CATEGORY'):
+                current_category = str(sc_val)
+                st.markdown(f"**🏷️ {current_category}**")
+                continue
+                
+            if pd.isna(sc_val):
                 continue
                 
             sc_key = str(sc_val)
