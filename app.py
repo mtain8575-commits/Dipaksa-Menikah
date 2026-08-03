@@ -11,7 +11,7 @@ st.set_page_config(
 # 1. Judul Utama Baru
 st.title("🎬 Monitoring Produksi MD Entertainment")
 
-excel_file = "Database_Schedule_Produksi.xlsx"
+excel_file = "Database_Jadwal_Produksi.xlsx"
 
 # Fungsi otomatis mendeteksi letak kolom Scene
 @st.cache_data
