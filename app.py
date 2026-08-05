@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 
-# Asumsi df_hari adalah dataframe rincian jadwal untuk hari yang sedang dipilih (Misal: Day 1)
+# Asumsi df adalah dataframe rincian jadwal untuk hari yang sedang dipilih (Misal: Day 1)
 # Kolom dataframe: Status, Scene, N/D, Page(s), Set Lokasi, Cast, Remark
 
 st.markdown("### 📋 Rincian Jadwal Syuting & Checklist")
 st.markdown("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
 
 # Ambil daftar unik Set Lokasi sesuai urutan di data
-unique_sets = df_hari['Set Lokasi'].unique()
+unique_sets = df['Set Lokasi'].unique()
 
 # Loop untuk setiap Set Lokasi sebagai Heading
 for set_lokasi in unique_sets:
@@ -16,7 +16,7 @@ for set_lokasi in unique_sets:
     st.markdown(f"#### 📍 SET LOKASI: {set_lokasi}")
     
     # Filter dataframe khusus untuk set lokasi tersebut
-    df_set_group = df_hari[df_hari['Set Lokasi'] == set_lokasi]
+    df_set_group = df[df['Set Lokasi'] == set_lokasi]
     
     # Tampilkan tabel/baris untuk scene-scene dalam set tersebut
     # Anda bisa menggunakan st.dataframe atau custom loop dengan checkbox
