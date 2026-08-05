@@ -1,10 +1,23 @@
 import streamlit as st
 import pandas as pd
 
+# 1. Pastikan Anda memuat data terlebih dahulu (contoh membaca dari Excel)
+# Sesuaikan nama file excel Anda jika berbeda (misal: 'Database_Jadwal_Produksi.xlsx')
+excel_file = 'Database_Jadwal_Produksi.xlsx' 
+
+@st.cache_data
+def load_data():
+    # Membaca sheet sesuai hari yang dipilih, atau simpan ke dataframe utama
+    df_load = pd.read_excel(excel_file, sheet_name=0) 
+    return df_load
+
+# Inisialisasi dataframe 'df'
+df = load_data()
+
+# 2. Bagian Rincian Jadwal & Checklist dengan Heading Set Lokasi
 st.markdown("### 📋 Rincian Jadwal Syuting & Checklist")
 st.markdown("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
 
-# Pastikan variabel dataframe Anda bernama 'df' atau sesuaikan dengan kode asli Anda
 if 'Set Lokasi' in df.columns:
     unique_sets = df['Set Lokasi'].unique()
     
