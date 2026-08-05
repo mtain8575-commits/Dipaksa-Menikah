@@ -1,54 +1,61 @@
 import streamlit as st
 import pandas as pd
 
-excel_file = 'Database_Jadwal_Produksi.xlsx' 
-
-@st.cache_data
-def load_data():
-    # Coba baca dengan header berada di baris ke-1 (indeks 1) atau sesuaikan jika baris header Anda di bawahnya
-    df_load = pd.read_excel(excel_file, sheet_name=0, header=1)
-    # Hapus baris yang seluruh kolomnya kosong
-    df_load = df_load.dropna(how='all')
-    return df_load
-
-df = load_data()
-
+# Konfigurasi halaman
 st.markdown("### 📋 Rincian Jadwal Syuting & Checklist")
 st.markdown("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
 
-# Cari kolom yang mirip dengan 'Set Lokasi' atau 'Lokasi'
-lokasi_col = None
-for col in df.columns:
-    if 'lokasi' in str(col).lower() or 'set' in str(col).lower():
-        lokasi_col = col
-        break
+excel_file = 'Database_Jadwal_Produksi.xlsx'
 
-if lokasi_col:
-    unique_sets = df[lokasi_col].dropna().unique()
+@st.cache_data
+def load_schedule_data(sheet_name):
+    # Membaca excel dengan header di baris ke-4 (indeks 3)
+    df = pd.read_excel(excel_file, sheet_name=sheet_name, header=3)
+    return df
+
+# Pilihan hari syuting di sidebar atau tabs (sesuaikan dengan kontrol Anda)
+# Contoh jika menggunakan selectbox hari:
+hari_pilihan = st.selectbox("Pilih Hari Syuting", ["Day 1", "Day 2", "Day 3"])
+
+try:
+    df_hari = load_schedule_data(hari_pilihan)
     
-    for set_lokasi in unique_sets:
-        st.markdown(f"#### 📍 SET LOKASI: {set_lokasi}")
-        df_set_group = df[df[lokasi_col] == set_lokasi]
+    # Bersihkan baris yang kosong total
+    df_hari = df_hari.dropna(how='all')
+    
+    current_category = ""
+    
+    # Iterasi baris untuk mendeteksi kategori set dan menampilkan tabel per kelompok
+    for idx, row in df_hari.iterrows():
+        scene_val = row.get("Scene", None)
         
-        for idx, row in df_set_group.iterrows():
-            col_chk, col_scene, col_nd, col_page, col_set, col_cast, col_remark = st.columns([0.6, 1, 1, 1, 3, 2, 3])
+        # Cek apakah baris ini adalah baris Kategori Set (Scene bernilai NaN / kosong)
+        if pd.isna(scene_val) or str(scene_val).strip() == "":
+            cat_text = str(row.get("No", ""))
+            if "SET CATEGORY" in cat_text.upper():
+                current_category = cat_text
+                st.markdown(f"#### 📍 {current_category}")
+            continue
             
-            with col_chk:
-                st.checkbox("", value=False, key=f"chk_{idx}")
-            with col_scene:
-                st.text(str(row.iloc[1] if len(row) > 1 else ""))
-            with col_nd:
-                st.text(str(row.iloc[2] if len(row) > 2 else ""))
-            with col_page:
-                st.text(str(row.iloc[3] if len(row) > 3 else ""))
-            with col_set:
-                st.text(str(row[lokasi_col]))
-            with col_cast:
-                st.text(str(row.iloc[5] if len(row) > 5 else ""))
-            with col_remark:
-                st.text(str(row.iloc[6] if len(row) > 6 else ""))
-                
-        st.markdown("---")
-else:
-    st.error("Kolom yang mengandung kata 'Lokasi' atau 'Set' tidak ditemukan dalam tabel.")
-    st.write("Kolom yang tersedia:", df.columns.tolist())
+        # Jika baris data adegan normal
+        col_chk, col_scene, col_nd, col_page, col_set, col_cast, col_remark = st.columns([0.5, 1, 1, 1, 3, 2, 3])
+        
+        with col_chk:
+            st.checkbox("", value=False, key=f"chk_{hari_pilihan}_{idx}")
+        with col_scene:
+            st.text(str(row.get("Scene", "")))
+        with col_nd:
+            st.text(str(row.get("N/D", "")))
+        with col_page:
+            st.text(str(row.get("Page(s)", "")))
+        with col_set:
+            st.text(str(row.get("SET", "")))
+        with col_cast:
+            st.text(str(row.get("CAST", "")))
+        with col_remark:
+            st.text(str(row.get("REMARK", "")))
+            
+    st.markdown("---")
+
+except Exception as e:
+    st.error(fTerjadi kesalahan saat memuat data: {e}")
