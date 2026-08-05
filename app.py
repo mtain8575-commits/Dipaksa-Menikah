@@ -24,7 +24,6 @@ try:
     df_hari = load_schedule_data(pilihan_menu)
     df_hari = df_hari.dropna(how='all')
     
-    # Berikan label kategori yang persisten ke setiap baris adegan
     current_category = "LAINNYA"
     categories_list = []
     
@@ -59,65 +58,10 @@ try:
     st.markdown("---")
 
     # ==========================================
-    # 🖨️ FITUR PANEL CETAK (A4 LANDSCAPE VIEW)
+    # 🖨️ PANEL CETAK / CALL SHEET FORMAT A4
     # ==========================================
     with st.expander("🖨️ Buka Panel Cetak (Format Call Sheet A4 Landscape)", expanded=False):
-        st.markdown("""
-        <style>
-            .print-container {
-                background-color: white;
-                color: black;
-                padding: 30px;
-                font-family: Arial, sans-serif;
-                width: 100%;
-                max-width: 1120px;
-                margin: auto;
-                border: 1px solid #ccc;
-            }
-            .print-header {
-                text-align: center;
-                font-weight: bold;
-                font-size: 18px;
-                margin-bottom: 5px;
-            }
-            .print-title {
-                text-align: center;
-                color: red;
-                font-weight: bold;
-                font-size: 22px;
-                margin-bottom: 25px;
-            }
-            .info-table {
-                width: 100%;
-                margin-bottom: 20px;
-                font-size: 14px;
-            }
-            .info-table td {
-                padding: 4px 8px;
-                vertical-align: top;
-            }
-            .schedule-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 10px;
-                font-size: 12px;
-            }
-            .schedule-table th, .schedule-table td {
-                border: 1px solid #333;
-                padding: 6px 8px;
-                text-align: left;
-            }
-            .schedule-table th {
-                background-color: #f2f2f2;
-            }
-            @media print {
-                body { visibility: hidden; }
-                .print-container { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; border: none; }
-            }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # Logika otomatis pengisian data kuning berdasarkan pilihan menu
+        
         loc_mapping = {
             "Day 1": "MAHARAJA DEPOK",
             "Day 2": "RUMAH SAKIT VIP / LORONG",
@@ -127,82 +71,39 @@ try:
         lokasi_terkini = loc_mapping.get(pilihan_menu, "JAKARTA & SEKITARNYA")
         tanggal_hari_ini = datetime.now().strftime("%d-%m-%Y")
 
-        st.markdown(f"""
-        <div class="print-container">
-            <div class="print-header">SCHEDULE SERIES</div>
-            <div class="print-title">"DIPAKSA MENIKAH"</div>
-            
-            <table class="info-table">
-                <tr>
-                    <td style="width: 15%;"><b>PRODUCTION</b></td>
-                    <td style="width: 35%;">: MD Entertainment</td>
-                    <td style="width: 15%;"><b>SHOOTING</b></td>
-                    <td style="width: 35%;">: <b>{pilihan_menu.upper()}</b></td>
-                </tr>
-                <tr>
-                    <td><b>DIRECTOR</b></td>
-                    <td>: <span style="background-color: yellow;">ANTO AGAM</span></td>
-                    <td><b>DATE</b></td>
-                    <td>: <span style="background-color: yellow;">{tanggal_hari_ini}</span></td>
-                </tr>
-                <tr>
-                    <td><b>DOP</b></td>
-                    <td>: <span style="background-color: yellow;">FENDI</span></td>
-                    <td><b>CREW CALL</b></td>
-                    <td>: 06.00 WIB</td>
-                </tr>
-                <tr>
-                    <td><b>ART DIRECTOR</b></td>
-                    <td>: <span style="background-color: yellow;">RIZAL</span></td>
-                    <td><b>LOCATION</b></td>
-                    <td>: <span style="background-color: yellow;">{lokasi_terkini}</span></td>
-                </tr>
-                <tr>
-                    <td><b>PIMPRO</b></td>
-                    <td>: <span style="background-color: yellow;">LENA</span></td>
-                    <td><b>ON CAM</b></td>
-                    <td>: 08.00 WIB</td>
-                </tr>
-            </table>
-
-            <hr style="border: 1px solid black; margin-bottom: 15px;">
-            
-            <table class="schedule-table">
-                <thead>
-                    <tr>
-                        <th style="width: 5%;">NO</th>
-                        <th style="width: 8%;">SCENE</th>
-                        <th style="width: 6%;">I/E</th>
-                        <th style="width: 25%;">SET</th>
-                        <th style="width: 20%;">PROPERTY</th>
-                        <th style="width: 16%;">CAST</th>
-                        <th style="width: 20%;">REMARK</th>
-                    </tr>
-                </thead>
-                <tbody>
-        """, unsafe_allow_html=True)
-
-        # Render baris tabel otomatis untuk cetak
-        for idx, row in df_scenes.iterrows():
-            st.markdown(f"""
-                    <tr>
-                        <td>{row.get('No', '')}</td>
-                        <td><b>{row.get('Scene', '')}</b></td>
-                        <td>{row.get('I/E', '')}</td>
-                        <td>{row.get('SET', '')}</td>
-                        <td>{row.get('PROPERTY', '')}</td>
-                        <td>{row.get('CAST', '')}</td>
-                        <td>{row.get('REMARK', '')}</td>
-                    </tr>
-            """, unsafe_allow_html=True)
-
-        st.markdown("""
-                </tbody>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
+        # Header Informasi Bergaya Call Sheet
+        st.markdown("<h3 style='text-align: center; margin-bottom: 0px;'>SCHEDULE SERIES</h3>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: red; margin-top: 0px;'>\"DIPAKSA MENIKAH\"</h2>", unsafe_allow_html=True)
         
-        st.info("💡 Tip: Anda bisa menekan tombol `Ctrl + P` di keyboard Anda atau klik kanan lalu pilih 'Print' setelah panel ini dibuka untuk mencetak dokumen dalam ukuran A4 Landscape.")
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.markdown(f"""
+            * **PRODUCTION** : MD Entertainment
+            * **DIRECTOR** : ANTO AGAM
+            * **DOP** : FENDI
+            * **ART DIRECTOR** : RIZAL
+            * **PIMPRO** : LENA
+            """)
+        with col_info2:
+            st.markdown(f"""
+            * **SHOOTING** : **{pilihan_menu.upper()}**
+            * **DATE** : {tanggal_hari_ini}
+            * **CREW CALL** : 06.00 WIB
+            * **LOCATION** : {lokasi_terkini}
+            * **ON CAM** : 08.00 WIB
+            """)
+            
+        st.markdown("---")
+        st.markdown("#### Tabel Rincian Adegan (Call Sheet)")
+        
+        # Menyiapkan DataFrame bersih untuk tabel cetak
+        df_print = df_scenes[['No', 'Scene', 'I/E', 'SET', 'PROPERTY', 'CAST', 'REMARK']].copy()
+        df_print.columns = ['NO', 'SCENE', 'I/E', 'SET', 'PROPERTY', 'CAST', 'REMARK']
+        
+        # Menampilkan tabel bersih yang mudah dibaca/dicetak
+        st.dataframe(df_print, use_container_width=True, hide_index=True)
+        
+        st.info("💡 Tip: Tekan `Ctrl + P` pada keyboard Anda untuk mencetak halaman ini dalam ukuran A4 Landscape.")
 
     st.markdown("---")
     st.markdown("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
