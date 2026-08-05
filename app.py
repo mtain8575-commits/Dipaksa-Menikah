@@ -6,8 +6,10 @@ st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist
 
 excel_file = 'Database_Jadwal_Produksi.xlsx'
 
-@st.cache_data
+# Memuat data tanpa cache statis agar setiap update file Excel langsung terbaca
 def load_schedule_data(sheet_name):
+    # Membersihkan cache agar mengambil file terbaru dari GitHub
+    st.cache_data.clear()
     df = pd.read_excel(excel_file, sheet_name=sheet_name, header=3)
     return df
 
@@ -33,7 +35,7 @@ try:
         if pd.isna(scene_val) or str(scene_val).strip() == "":
             if "SET CATEGORY" in no_val.upper():
                 current_category = no_val
-            categories_list.append(None) # Baris kategori ditandai None untuk dilewati saat render tabel
+            categories_list.append(None)
         else:
             categories_list.append(current_category)
             
