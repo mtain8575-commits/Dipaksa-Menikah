@@ -13,8 +13,7 @@ def load_schedule_data(sheet_name):
     df = pd.read_excel(excel_file, sheet_name=sheet_name, header=3)
     return df
 
-# Pilihan hari syuting di sidebar atau tabs (sesuaikan dengan kontrol Anda)
-# Contoh jika menggunakan selectbox hari:
+# Pilihan hari syuting
 hari_pilihan = st.selectbox("Pilih Hari Syuting", ["Day 1", "Day 2", "Day 3"])
 
 try:
@@ -58,4 +57,4 @@ try:
     st.markdown("---")
 
 except Exception as e:
-    st.error(fTerjadi kesalahan saat memuat data: {e}")
+    st.error(f"Terjadi kesalahan saat memuat data: {e}")
