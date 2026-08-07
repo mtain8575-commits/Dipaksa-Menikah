@@ -10,20 +10,14 @@ st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist
 # Link Google Spreadsheet CSV yang Anda berikan
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvGwQ3G04zagmtYdRateDpRNBcynLrMKgJ52LJGTWTJQgGL4ndtS8EYsDUpYCkGKDsRGhZ5JgPDKzL/pub?output=csv"
 
-@st.cache_data(ttl=10) # Cache diperbarui secara berkala agar data selalu segar
-def load_schedule_data(sheet_name):
-    # Membaca data langsung dari Google Sheets
-    df_all = pd.read_csv(SHEET_CSV_URL)
+@st.cache_data(ttl=10)
+def load_schedule_data():
+    # Membaca data dari Google Sheets dengan header berada di baris ke-4 (indeks 3)
+    df_all = pd.read_csv(SHEET_CSV_URL, header=3)
     return df_all
 
-# Dropdown pilihan hari syuting atau master schedule
-pilihan_menu = st.selectbox(
-    "Pilih Hari Syuting / Master Schedule", 
-    ["Day 1", "Day 2", "Day 3", "Master Schedule"]
-)
-
 try:
-    df_hari = load_schedule_data(pilihan_menu)
+    df_hari = load_schedule_data()
     df_hari = df_hari.dropna(how='all')
     
     # Berikan label kategori yang persisten ke setiap baris adegan
@@ -45,8 +39,8 @@ try:
     df_scenes = df_hari[df_hari['Scene'].notna() & (df_hari['Scene'] != '')].copy()
     total_scenes = len(df_scenes)
     
-    # Inisialisasi session state untuk checklist status per menu
-    state_key = f'status_{pilihan_menu}'
+    # Inisialisasi session state untuk checklist status
+    state_key = 'status_monitoring'
     if state_key not in st.session_state:
         st.session_state[state_key] = {idx: False for idx in df_scenes.index}
     
@@ -70,13 +64,6 @@ try:
     # 🖨️ PANEL CETAK / CALL SHEET FORMAT A4
     # ==========================================
     with st.expander("🖨️ Buka Panel Cetak (Format Call Sheet A4 Landscape)", expanded=False):
-        loc_mapping = {
-            "Day 1": "MAHARAJA DEPOK",
-            "Day 2": "RUMAH SAKIT VIP / LORONG",
-            "Day 3": "RUMAH INTAN & MASJID",
-            "Master Schedule" : "ALL LOCATIONS"
-        }
-        lokasi_terkini = loc_mapping.get(pilihan_menu, "JAKARTA & SEKITARNYA")
         tanggal_hari_ini = datetime.now().strftime("%d-%m-%Y")
 
         st.markdown("<h3 style='text-align: center; margin-bottom: 0px;'>SCHEDULE SERIES</h3>", unsafe_allow_html=True)
@@ -84,7 +71,7 @@ try:
         
         col_info1, col_info2 = st.columns(2)
         with col_info1:
-            st.markdown(f"""
+            st.markdown("""
             * **PRODUCTION** : MD Entertainment
             * **DIRECTOR** : ANTO AGAM
             * **DOP** : FENDI
@@ -93,10 +80,10 @@ try:
             """)
         with col_info2:
             st.markdown(f"""
-            * **SHOOTING** : **{pilihan_menu.upper()}**
+            * **SHOOTING** : **MASTER SCHEDULE**
             * **DATE** : {tanggal_hari_ini}
             * **CREW CALL** : 06.00 WIB
-            * **LOCATION** : {lokasi_terkini}
+            * **LOCATION** : JAKARTA & SEKITARNYA
             * **ON CAM** : 08.00 WIB
             """)
             
@@ -123,7 +110,7 @@ try:
             
             with col_chk:
                 current_val = st.session_state[state_key].get(idx, False)
-                is_checked = st.checkbox("", value=current_val, key=f"chk_{pilihan_menu}_{idx}")
+                is_checked = st.checkbox("", value=current_val, key=f"chk_{idx}")
                 if is_checked != current_val:
                     st.session_state[state_key][idx] = is_checked
                     st.rerun()
