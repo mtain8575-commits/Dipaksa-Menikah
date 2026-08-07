@@ -7,17 +7,38 @@ st.set_page_config(page_title="Dashboard Monitoring Produksi", layout="wide")
 
 st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
 
-# Link Google Spreadsheet CSV yang Anda berikan
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvGwQ3G04zagmtYdRateDpRNBcynLrMKgJ52LJGTWTJQgGL4ndtS8EYsDUpYCkGKDsRGhZ5JgPDKzL/pub?output=csv"
+# Dropdown pilihan hari syuting atau master schedule
+pilihan_menu = st.selectbox(
+    "Pilih Hari Syuting / Master Schedule", 
+    ["Day 1", "Day 2", "Day 3", "Master Schedule"]
+)
+
+# Mapping link publish CSV Google Sheets untuk masing-masing tab/sheet Anda
+# (Pastikan Anda sudah publish masing-masing sheet di Google Sheets dan masukkan linknya di sini)
+SHEET_URLS = {
+    "Master Schedule": "LINK_CSV_MASTER_SCHEDULE_ANDA",
+    "Day 1": "LINK_CSV_DAY_1_ANDA",
+    "Day 2": "LINK_CSV_DAY_2_ANDA",
+    "Day 3": "LINK_CSV_DAY_3_ANDA"
+}
 
 @st.cache_data(ttl=10)
-def load_schedule_data():
-    # Membaca data dari Google Sheets dengan header berada di baris ke-4 (indeks 3)
-    df_all = pd.read_csv(SHEET_CSV_URL, header=3)
+def load_schedule_data(url):
+    df_all = pd.read_csv(url, header=3)
     return df_all
 
 try:
-    df_hari = load_schedule_data()
+    # Mengambil URL sesuai pilihan menu
+    current_url = SHEET_URLS.get(pilihan_menu)
+    
+    if not current_url or "LINK_CSV" in current_url:
+        st.warning("⚠️ Silakan masukkan link CSV Google Sheets untuk setiap sheet pada bagian konfigurasi kode di bawah.")
+        # Fallback menggunakan file lokal jika link belum diisi
+        current_url = 'Database_Jadwal_Produksi.xlsx'
+        df_hari = pd.read_excel(current_url, sheet_name=pilihan_menu, header=3)
+    else:
+        df_hari = load_schedule_data(current_url)
+
     df_hari = df_hari.dropna(how='all')
     
     # Berikan label kategori yang persisten ke setiap baris adegan
@@ -39,8 +60,8 @@ try:
     df_scenes = df_hari[df_hari['Scene'].notna() & (df_hari['Scene'] != '')].copy()
     total_scenes = len(df_scenes)
     
-    # Inisialisasi session state untuk checklist status
-    state_key = 'status_monitoring'
+    # Inisialisasi session state untuk checklist status per menu
+    state_key = f'status_{pilihan_menu}'
     if state_key not in st.session_state:
         st.session_state[state_key] = {idx: False for idx in df_scenes.index}
     
@@ -64,6 +85,13 @@ try:
     # 🖨️ PANEL CETAK / CALL SHEET FORMAT A4
     # ==========================================
     with st.expander("🖨️ Buka Panel Cetak (Format Call Sheet A4 Landscape)", expanded=False):
+        loc_mapping = {
+            "Day 1": "MAHARAJA DEPOK",
+            "Day 2": "RUMAH SAKIT VIP / LORONG",
+            "Day 3": "RUMAH INTAN & MASJID",
+            "Master Schedule" : "ALL LOCATIONS"
+        }
+        lokasi_terkini = loc_mapping.get(pilihan_menu, "JAKARTA & SEKITARNYA")
         tanggal_hari_ini = datetime.now().strftime("%d-%m-%Y")
 
         st.markdown("<h3 style='text-align: center; margin-bottom: 0px;'>SCHEDULE SERIES</h3>", unsafe_allow_html=True)
@@ -71,7 +99,7 @@ try:
         
         col_info1, col_info2 = st.columns(2)
         with col_info1:
-            st.markdown("""
+            st.markdown(f"""
             * **PRODUCTION** : MD Entertainment
             * **DIRECTOR** : ANTO AGAM
             * **DOP** : FENDI
@@ -80,10 +108,10 @@ try:
             """)
         with col_info2:
             st.markdown(f"""
-            * **SHOOTING** : **MASTER SCHEDULE**
+            * **SHOOTING** : **{pilihan_menu.upper()}**
             * **DATE** : {tanggal_hari_ini}
             * **CREW CALL** : 06.00 WIB
-            * **LOCATION** : JAKARTA & SEKITARNYA
+            * **LOCATION** : {lokasi_terkini}
             * **ON CAM** : 08.00 WIB
             """)
             
@@ -110,7 +138,7 @@ try:
             
             with col_chk:
                 current_val = st.session_state[state_key].get(idx, False)
-                is_checked = st.checkbox("", value=current_val, key=f"chk_{idx}")
+                is_checked = st.checkbox("", value=current_val, key=f"chk_{pilihan_menu}_{idx}")
                 if is_checked != current_val:
                     st.session_state[state_key][idx] = is_checked
                     st.rerun()
@@ -131,4 +159,4 @@ try:
         st.markdown("---")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan saat memuat data dari Google Sheets: {e}")
+    st.error(f"Terjadi kesalahan saat memuat data: {e}")
