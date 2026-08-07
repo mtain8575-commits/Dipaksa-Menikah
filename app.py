@@ -52,6 +52,7 @@ def load_data(sheet_name):
           else:
             df.loc[idx, c] = ""
 
+    # Pastikan kolom Status ada
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -60,6 +61,10 @@ def load_data(sheet_name):
           if str(x).lower().strip() in ["sudah take", "true", "1", "sudah"]
           else False
       )
+
+    # PINDAHKAN KOLOM STATUS KE PALING DEPAN AGAR LANGSUNG TERLIHAT
+    other_cols = [c for c in df.columns if c != "Status"]
+    df = df[["Status"] + other_cols]
 
     df = df.reset_index(drop=True)
     return df
@@ -77,9 +82,11 @@ if df is not None and not df.empty:
   ]
 
   total_scene = len(scene_df)
-  sudah_take = len(
-      scene_df[scene_df["Status"] == True]
-  ) if "Status" in scene_df.columns else 0
+  sudah_take = (
+      len(scene_df[scene_df["Status"] == True])
+      if "Status" in scene_df.columns
+      else 0
+  )
   belum_take = total_scene - sudah_take
 
   st.markdown("---")
