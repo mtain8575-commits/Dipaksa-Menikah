@@ -7,13 +7,14 @@ st.set_page_config(page_title="Dashboard Monitoring Produksi", layout="wide")
 
 st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
 
-excel_file = 'Database_Jadwal_Produksi.xlsx'
+# Link Google Spreadsheet CSV yang Anda berikan
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvGwQ3G04zagmtYdRateDpRNBcynLrMKgJ52LJGTWTJQgGL4ndtS8EYsDUpYCkGKDsRGhZ5JgPDKzL/pub?output=csv"
 
-@st.cache_data
+@st.cache_data(ttl=10) # Cache diperbarui secara berkala agar data selalu segar
 def load_schedule_data(sheet_name):
-    st.cache_data.clear()
-    df = pd.read_excel(excel_file, sheet_name=sheet_name, header=3)
-    return df
+    # Membaca data langsung dari Google Sheets
+    df_all = pd.read_csv(SHEET_CSV_URL)
+    return df_all
 
 # Dropdown pilihan hari syuting atau master schedule
 pilihan_menu = st.selectbox(
@@ -57,7 +58,7 @@ try:
     completed_count = sum(1 for idx in df_scenes.index if st.session_state[state_key].get(idx, False))
     remaining_count = total_scenes - completed_count
     
-    # 📊 TAMPILAN REKAP / METRICS PROGRESS (KEMBALI DI ATAS)
+    # 📊 TAMPILAN REKAP / METRICS PROGRESS UNTUK PIMPINAN & PRODUSER
     col_m1, col_m2, col_m3 = st.columns(3)
     col_m1.metric("Total Scene", total_scenes)
     col_m2.metric("Sudah Take (Selesai)", completed_count)
@@ -122,7 +123,6 @@ try:
             
             with col_chk:
                 current_val = st.session_state[state_key].get(idx, False)
-                # Menggunakan on_change otomatis lewat re-run saat checkbox diklik
                 is_checked = st.checkbox("", value=current_val, key=f"chk_{pilihan_menu}_{idx}")
                 if is_checked != current_val:
                     st.session_state[state_key][idx] = is_checked
@@ -144,4 +144,4 @@ try:
         st.markdown("---")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan saat memuat data: {e}")
+    st.error(f"Terjadi kesalahan saat memuat data dari Google Sheets: {e}")
