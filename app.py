@@ -5,7 +5,11 @@ st.set_page_config(
     page_title="Jadwal Dashboard & Breakdown Produksi", layout="wide"
 )
 
-# 1. Judul & Header Utama ala Gambar 2
+# Inisialisasi session_state untuk menyimpan status checklist agar tidak hilang saat diklik
+if "checklist_state" not in st.session_state:
+  st.session_state.checklist_state = {}
+
+# 1. Judul & Header Utama
 st.markdown("### 🎬 Jadwal Dashboard & Breakdown Produksi")
 st.markdown("**Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)**")
 
@@ -43,12 +47,6 @@ def load_data(sheet_name):
 
     if "Status" not in df.columns:
       df["Status"] = False
-    else:
-      df["Status"] = df["Status"].apply(
-          lambda x: True
-          if str(x).lower().strip() in ["sudah take", "true", "1", "sudah"]
-          else False
-      )
 
     df = df.reset_index(drop=True)
     return df
@@ -59,7 +57,20 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Hitung statistik
+  # Sinkronisasi status dari session state
+  for idx, row in df.iterrows():
+    key_name = f"chk_{pilihan_menu}_{idx}"
+    if key_name in st.session_state:
+      df.loc[idx, "Status"] = st.session_state[key_name]
+    else:
+      val = row.get("Status", False)
+      df.loc[idx, "Status"] = (
+          True
+          if str(val).lower().strip() in ["true", "1", "sudah", "yes"]
+          else False
+      )
+
+  # Hitung statistik berdasarkan scene valid
   scene_mask = (
       df["No"].notna()
       & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
@@ -68,19 +79,15 @@ if df is not None and not df.empty:
   scene_df = df[scene_mask]
 
   total_scene = len(scene_df)
-  sudah_take = (
-      len(scene_df[scene_df["Status"] == True])
-      if "Status" in scene_df.columns
-      else 0
-  )
+  sudah_take = len(scene_df[scene_df["Status"] == True])
   belum_take = total_scene - sudah_take
 
   st.markdown("---")
 
-  # Metrik Atas
+  # Metrik Atas (Kotak Merah/Info Atas)
   col1, col2, col3 = st.columns(3)
   col1.metric(f"Keseluruhan Adegan ({pilihan_menu.upper()})", total_scene)
-  col2.metric("Scene Sudah Take", sudah_take, delta="0%")
+  col2.metric("Scene Sudah Take", sudah_take, delta=f"{sudah_take} Selesai")
   col3.metric("Sisa Belum Take", belum_take, delta=f"-{belum_take}", delta_color="inverse")
 
   # Info Pimpro
@@ -97,53 +104,31 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # Tombol Unduh & Ekspor
-  st.markdown("#### 🖨️ Pilihan Cetak & Ekspor Laporan")
-  bcol1, bcol2, bcol3 = st.columns(3)
-  with bcol1:
-    if not scene_df.empty:
-      csv_data = scene_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label=f"📥 Download {pilihan_menu} (CSV)",
-          data=csv_data,
-          file_name=f"Jadwal_{pilihan_menu}.csv",
-          mime="text/csv",
-      )
-  with bcol2:
-    st.button("📥 Download Master Excel (3 Hari)")
-  with bcol3:
-    st.button("🖨️ Cetak / Print Halaman (PDF)")
+  # 2. Bagian Pilihan Cetak & Ekspor Laporan SUDAH DIHILANGKAN SESUAI PERMINTAAN
 
-  st.markdown("---")
-
-  # Bagian Rincian Jadwal & Checklist ala Gambar 2
+  # 3. Rincian Jadwal Syuting & Checklist
   st.markdown(
       f"#### 📋 Rincian Jadwal Syuting & Checklist - {pilihan_menu.upper()}"
   )
   st.caption("Centang kotak pada kolom Status jika adegan sudah selesai direkam:")
 
-  # Render per kelompok Set Category seperti Gambar 2
-  current_category = "UMUM"
+  # Render baris per kategori set dan checklist
   for idx, row in df.iterrows():
     val_no = str(row.get("No", ""))
     if "SET CATEGORY" in val_no or "SET CA" in val_no:
-      # Ambil teks kategori lengkap
       cat_text = next(
           (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
           "SET CATEGORY",
       )
-      current_category = cat_text
-      # Tampilkan Banner Kategori Set ala Gambar 2 (Kotak Biru/Abu Elegan)
       st.markdown(
           f"""
             <div style="background-color: #1e293b; padding: 10px 15px; border-radius: 6px; border-left: 5px solid #3b82f6; margin-top: 15px; margin-bottom: 8px; font-weight: bold; color: #ffffff;">
-                📁 {current_category}
+                📁 {cat_text}
             </div>
             """,
           unsafe_allow_html=True,
       )
     elif val_no.strip() != "":
-      # Baris Adegan / Scene
       sc_no = row.get("Scene", "")
       nd = row.get("N/D", "")
       page = row.get("Page(s)", "")
@@ -153,14 +138,14 @@ if df is not None and not df.empty:
 
       cols = st.columns([0.5, 1, 1, 1, 2.5, 2, 2.5])
       with cols[0]:
-        # Checkbox interaktif untuk setiap scene
-        status_val = st.checkbox(
-            "",
-            value=bool(row.get("Status", False)),
-            key=f"chk_{pilihan_menu}_{idx}",
+        key_name = f"chk_{pilihan_menu}_{idx}"
+        # Membuat checkbox interaktif yang langsung memperbarui state
+        checked = st.checkbox(
+            "", value=bool(row.get("Status", False)), key=key_name
         )
-        # Update status di dataframe jika dicentang
-        df.loc[idx, "Status"] = status_val
+        if checked != row.get("Status", False):
+          df.loc[idx, "Status"] = checked
+          st.rerun()
       with cols[1]:
         st.write(f"**{row.get('No', '')}**")
       with cols[2]:
