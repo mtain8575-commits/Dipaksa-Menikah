@@ -1,162 +1,90 @@
-import streamlit as st
 import pandas as pd
-from datetime import datetime
+import streamlit as st
 
 # Konfigurasi halaman Streamlit agar lebar (wide mode)
-st.set_page_config(page_title="Dashboard Monitoring Produksi", layout="wide")
+st.set_page_config(
+    page_title="Dashboard Monitoring Produksi", layout="wide"
+)
 
 st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
 
 # Dropdown pilihan hari syuting atau master schedule
 pilihan_menu = st.selectbox(
-    "Pilih Hari Syuting / Master Schedule", 
-    ["Day 1", "Day 2", "Day 3", "Master Schedule"]
+    "Pilih Hari Syuting / Master Schedule",
+    ["Day 1", "Day 2", "Day 3", "Master Schedule"],
 )
 
-# Mapping link publish CSV Google Sheets untuk masing-masing tab/sheet Anda
-# (Pastikan Anda sudah publish masing-masing sheet di Google Sheets dan masukkan linknya di sini)
+# -------------------------------------------------------------
+# MASUKKAN LINK CSV GOOGLE SHEETS ANDA DI BAWAH INI:
+# -------------------------------------------------------------
 SHEET_URLS = {
     "Master Schedule": "LINK_CSV_MASTER_SCHEDULE_ANDA",
     "Day 1": "LINK_CSV_DAY_1_ANDA",
     "Day 2": "LINK_CSV_DAY_2_ANDA",
-    "Day 3": "LINK_CSV_DAY_3_ANDA"
+    "Day 3": "LINK_CSV_DAY_3_ANDA",
 }
 
+
+# Fungsi untuk mengambil data dari Google Sheets secara otomatis
 @st.cache_data(ttl=10)
-def load_schedule_data(url):
-    df_all = pd.read_csv(url, header=3)
-    return df_all
+def load_data(url):
+  try:
+    df = pd.read_csv(url)
+    return df
+  except Exception as e:
+    return None
 
-try:
-    # Mengambil URL sesuai pilihan menu
-    current_url = SHEET_URLS.get(pilihan_menu)
-    
-    if not current_url or "LINK_CSV" in current_url:
-        st.warning("⚠️ Silakan masukkan link CSV Google Sheets untuk setiap sheet pada bagian konfigurasi kode di bawah.")
-        # Fallback menggunakan file lokal jika link belum diisi
-        current_url = 'Database_Jadwal_Produksi.xlsx'
-        df_hari = pd.read_excel(current_url, sheet_name=pilihan_menu, header=3)
-    else:
-        df_hari = load_schedule_data(current_url)
 
-    df_hari = df_hari.dropna(how='all')
-    
-    # Berikan label kategori yang persisten ke setiap baris adegan
-    current_category = "LAINNYA"
-    categories_list = []
-    
-    for idx, row in df_hari.iterrows():
-        scene_val = row.get("Scene", None)
-        no_val = str(row.get("No", ""))
-        
-        if pd.isna(scene_val) or str(scene_val).strip() == "":
-            if "SET CATEGORY" in no_val.upper():
-                current_category = no_val
-            categories_list.append(None)
-        else:
-            categories_list.append(current_category)
-            
-    df_hari['Active_Category'] = categories_list
-    df_scenes = df_hari[df_hari['Scene'].notna() & (df_hari['Scene'] != '')].copy()
-    total_scenes = len(df_scenes)
-    
-    # Inisialisasi session state untuk checklist status per menu
-    state_key = f'status_{pilihan_menu}'
-    if state_key not in st.session_state:
-        st.session_state[state_key] = {idx: False for idx in df_scenes.index}
-    
-    for idx in df_scenes.index:
-        if idx not in st.session_state[state_key]:
-            st.session_state[state_key][idx] = False
+# Ambil URL sesuai menu yang dipilih
+selected_url = SHEET_URLS.get(pilihan_menu)
 
-    # Hitung jumlah yang sudah dichecklist secara real-time
-    completed_count = sum(1 for idx in df_scenes.index if st.session_state[state_key].get(idx, False))
-    remaining_count = total_scenes - completed_count
-    
-    # 📊 TAMPILAN REKAP / METRICS PROGRESS UNTUK PIMPINAN & PRODUSER
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Total Scene", total_scenes)
-    col_m2.metric("Sudah Take (Selesai)", completed_count)
-    col_m3.metric("Sisa Belum Take", remaining_count)
-    
-    st.markdown("---")
+if "LINK_CSV" in selected_url:
+  st.warning(
+      "⚠️ Silakan masukkan link CSV Google Sheets yang valid untuk tab ini"
+      " pada bagian konfigurasi kode di atas."
+  )
+else:
+  df = load_data(selected_url)
 
-    # ==========================================
-    # 🖨️ PANEL CETAK / CALL SHEET FORMAT A4
-    # ==========================================
-    with st.expander("🖨️ Buka Panel Cetak (Format Call Sheet A4 Landscape)", expanded=False):
-        loc_mapping = {
-            "Day 1": "MAHARAJA DEPOK",
-            "Day 2": "RUMAH SAKIT VIP / LORONG",
-            "Day 3": "RUMAH INTAN & MASJID",
-            "Master Schedule" : "ALL LOCATIONS"
-        }
-        lokasi_terkini = loc_mapping.get(pilihan_menu, "JAKARTA & SEKITARNYA")
-        tanggal_hari_ini = datetime.now().strftime("%d-%m-%Y")
+  if df is not None and not df.empty:
+    # Bersihkan nama kolom dari spasi berlebih jika ada
+    df.columns = df.columns.str.strip()
 
-        st.markdown("<h3 style='text-align: center; margin-bottom: 0px;'>SCHEDULE SERIES</h3>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center; color: red; margin-top: 0px;'>\"DIPAKSA MENIKAH\"</h2>", unsafe_allow_html=True)
-        
-        col_info1, col_info2 = st.columns(2)
-        with col_info1:
-            st.markdown(f"""
-            * **PRODUCTION** : MD Entertainment
-            * **DIRECTOR** : ANTO AGAM
-            * **DOP** : FENDI
-            * **ART DIRECTOR** : RIZAL
-            * **PIMPRO** : LENA
-            """)
-        with col_info2:
-            st.markdown(f"""
-            * **SHOOTING** : **{pilihan_menu.upper()}**
-            * **DATE** : {tanggal_hari_ini}
-            * **CREW CALL** : 06.00 WIB
-            * **LOCATION** : {lokasi_terkini}
-            * **ON CAM** : 08.00 WIB
-            """)
-            
-        st.markdown("---")
-        st.markdown("#### Tabel Rincian Adegan (Call Sheet)")
-        
-        df_print = df_scenes[['No', 'Scene', 'I/E', 'SET', 'PROPERTY', 'CAST', 'REMARK']].copy()
-        df_print.columns = ['NO', 'SCENE', 'I/E', 'SET', 'PROPERTY', 'CAST', 'REMARK']
-        st.dataframe(df_print, use_container_width=True, hide_index=True)
-        st.info("💡 Tip: Tekan `Ctrl + P` pada keyboard Anda untuk mencetak halaman ini dalam ukuran A4 Landscape.")
+    # Pastikan kolom Status ada
+    if "Status" not in df.columns:
+      df["Status"] = "Belum Take"
 
     st.markdown("---")
-    st.markdown("Centang kotak pada kolom **Status** jika adegan sudah selesai direkam:")
-    
-    unique_categories = df_scenes['Active_Category'].dropna().unique()
-    
-    # Render daftar kategori dan checklist adegan secara interaktif
-    for cat in unique_categories:
-        st.markdown(f"#### 📍 {cat}")
-        df_cat_scenes = df_scenes[df_scenes['Active_Category'] == cat]
-        
-        for idx, row in df_cat_scenes.iterrows():
-            col_chk, col_scene, col_nd, col_page, col_set, col_cast, col_remark = st.columns([0.5, 1, 1, 1, 3, 2, 3])
-            
-            with col_chk:
-                current_val = st.session_state[state_key].get(idx, False)
-                is_checked = st.checkbox("", value=current_val, key=f"chk_{pilihan_menu}_{idx}")
-                if is_checked != current_val:
-                    st.session_state[state_key][idx] = is_checked
-                    st.rerun()
-                
-            with col_scene:
-                st.text(str(row.get("Scene", "")))
-            with col_nd:
-                st.text(str(row.get("N/D", "")))
-            with col_page:
-                st.text(str(row.get("Page(s)", "")))
-            with col_set:
-                st.text(str(row.get("SET", "")))
-            with col_cast:
-                st.text(str(row.get("CAST", "")))
-            with col_remark:
-                st.text(str(row.get("REMARK", "")))
-                
-        st.markdown("---")
 
-except Exception as e:
-    st.error(f"Terjadi kesalahan saat memuat data: {e}")
+    # Hitung Statistik Ringkasan
+    total_scene = len(df)
+    sudah_take = len(df[df["Status"].astype(str).str.contains("Sudah", na=False)])
+    belum_take = total_scene - sudah_take
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🎥 Total Scene", total_scene)
+    col2.metric("✅ Sudah Take (Selesai)", sudah_take)
+    col3.metric("⏳ Sisa Belum Take", belum_take)
+
+    st.markdown("---")
+    st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
+
+    # Tampilkan data interaktif dengan opsi checklist
+    edited_df = st.data_editor(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status Take",
+                help="Pilih status pengambilan gambar",
+                options=["Belum Take", "Sudah Take"],
+                required=True,
+            )
+        },
+    )
+  else:
+    st.error(
+        "❌ Gagal memuat data. Pastikan link Google Sheets sudah di-publish ke"
+        " web berformat CSV."
+    )
