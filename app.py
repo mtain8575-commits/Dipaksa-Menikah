@@ -1,12 +1,18 @@
 import pandas as pd
 import streamlit as st
 
+# Konfigurasi halaman
 st.set_page_config(
-    page_title="Dashboard Monitoring Produksi", layout="wide"
+    page_title="Dashboard Breakdown Produksi", layout="wide"
 )
 
-st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
+# 1. JUDUL & SUBTITLE UTAMA
+st.markdown(
+    "### 🎬 Jadwal Dashboard & Breakdown Produksi"
+)  # Menggunakan markdown biasa agar bersih
+st.markdown("**Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)**")
 
+# Dropdown pilihan hari syuting
 pilihan_menu = st.selectbox(
     "Pilih Hari Syuting / Master Schedule",
     ["Master Schedule", "Day 1", "Day 2", "Day 3"],
@@ -39,20 +45,6 @@ def load_data(sheet_name):
     df = df.loc[:, df.columns.notna()]
     df.columns = [str(c).strip() for c in df.columns]
 
-    for idx, row in df.iterrows():
-      val_no = str(row.get("No", ""))
-      if "SET CATEGORY" in val_no or "SET CA" in val_no:
-        full_text = next(
-            (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
-            "SET CATEGORY",
-        )
-        for c in df.columns:
-          if c == "No":
-            df.loc[idx, c] = f"📌 {full_text}"
-          else:
-            df.loc[idx, c] = ""
-
-    # Pastikan kolom Status ada
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -61,10 +53,6 @@ def load_data(sheet_name):
           if str(x).lower().strip() in ["sudah take", "true", "1", "sudah"]
           else False
       )
-
-    # PINDAHKAN KOLOM STATUS KE PALING DEPAN AGAR LANGSUNG TERLIHAT
-    other_cols = [c for c in df.columns if c != "Status"]
-    df = df[["Status"] + other_cols]
 
     df = df.reset_index(drop=True)
     return df
@@ -75,11 +63,13 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  scene_df = df[
+  # Identifikasi baris scene valid (bukan baris kategori set)
+  scene_mask = (
       df["No"].notna()
       & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
       & (df["No"].astype(str).str.strip() != "")
-  ]
+  )
+  scene_df = df[scene_mask]
 
   total_scene = len(scene_df)
   sudah_take = (
@@ -91,22 +81,62 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
+  # 2. Kotak Metrik Atas
   col1, col2, col3 = st.columns(3)
-  col1.metric("🎥 Total Scene", total_scene)
-  col2.metric("✅ Sudah Take (Selesai)", sudah_take)
-  col3.metric("⏳ Sisa Belum Take", belum_take)
+  col1.metric(f"Keseluruhan Adegan ({pilihan_menu.upper()})", total_scene)
+  col2.metric("Scene Sudah Take", sudah_take, delta="0%")
+  col3.metric("Sisa Belum Take", belum_take, delta=f"-{belum_take}", delta_color="inverse")
+
+  # 3. Kotak Informasi Status Pimpinan Produksi (Pimpro)
+  if sudah_take == 0:
+    st.info(
+        "ℹ️ Status Pimpinan Produksi (Pimpro): Belum ada adegan yang dicentang"
+        " selesai (Take). Silakan pantau eksekusi di set."
+    )
+  else:
+    st.success(
+        f"✅ Status Pimpinan Produksi (Pimpro): Sebanyak {sudah_take} scene"
+        " telah selesai direkam."
+    )
 
   st.markdown("---")
-  st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
+  # 4. Pilihan Cetak & Ekspor Laporan
+  st.markdown("#### 🖨️ Pilihan Cetak & Ekspor Laporan")
+  bcol1, bcol2, bcol3 = st.columns(3)
+  with bcol1:
+    if not scene_df.empty:
+      csv_data = scene_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label=f"📥 Download {pilihan_menu} (CSV)",
+          data=csv_data,
+          file_name=f"Jadwal_{pilihan_menu}.csv",
+          mime="text/csv",
+      )
+  with bcol2:
+    st.button("📥 Download Master Excel (3 Hari)")
+  with bcol3:
+    st.button("🖨️ Cetak / Print Halaman (PDF)")
+
+  st.markdown("---")
+
+  # 5. Rincian Jadwal Syuting & Checklist
+  st.markdown(f"#### 📋 Rincian Jadwal Syuting & Checklist - {pilihan_menu.upper()}")
+  st.caption("Centang kotak pada kolom Status jika adegan sudah selesai direkam:")
+
+  # Pindahkan kolom Status ke paling depan agar menjadi kotak centang utama
+  other_cols = [c for c in df.columns if c != "Status"]
+  df_display = df[["Status"] + other_cols]
+
+  # Tampilkan tabel interaktif dengan Checkbox
   edited_df = st.data_editor(
-      df,
+      df_display,
       use_container_width=True,
       hide_index=True,
       column_config={
           "Status": st.column_config.CheckboxColumn(
-              "✅ Sudah Take",
-              help="Centang jika scene ini sudah selesai",
+              "Status",
+              help="Centang jika scene ini sudah selesai direkam",
               default=False,
           )
       },
