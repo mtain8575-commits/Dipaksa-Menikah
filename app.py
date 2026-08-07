@@ -39,7 +39,6 @@ def load_data(sheet_name):
     df = df.loc[:, df.columns.notna()]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Bersihkan baris Set Category agar tidak ada tulisan None di kolom lain
     for idx, row in df.iterrows():
       val_no = str(row.get("No", ""))
       if "SET CATEGORY" in val_no or "SET CA" in val_no:
@@ -47,14 +46,12 @@ def load_data(sheet_name):
             (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
             "SET CATEGORY",
         )
-        # Masukkan teks kategori ke kolom No dan kosongkan kolom lainnya secara bersih
         for c in df.columns:
           if c == "No":
             df.loc[idx, c] = f"📌 {full_text}"
           else:
             df.loc[idx, c] = ""
 
-    # Pastikan kolom Status berupa boolean untuk Checkbox
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -73,7 +70,6 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Hitung statistik dari baris scene valid
   scene_df = df[
       df["No"].notna()
       & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
@@ -88,7 +84,6 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # Metrik Atas (Kotak Merah)
   col1, col2, col3 = st.columns(3)
   col1.metric("🎥 Total Scene", total_scene)
   col2.metric("✅ Sudah Take (Selesai)", sudah_take)
@@ -97,7 +92,6 @@ if df is not None and not df.empty:
   st.markdown("---")
   st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
-  # Tabel Interaktif dengan Checkbox Status yang Jelas
   edited_df = st.data_editor(
       df,
       use_container_width=True,
