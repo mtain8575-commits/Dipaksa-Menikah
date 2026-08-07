@@ -53,7 +53,7 @@ def load_data(sheet_name):
           else:
             df.loc[idx, c] = ""
 
-    # PAKSA TAMBAHKAN KOLOM STATUS JIKA BELUM ADA DI EXCEL
+    # PAKSA TAMBAHKAN KOLOM STATUS JIKA BELUM ADA
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -94,7 +94,7 @@ if df is not None and not df.empty:
   st.markdown("---")
   st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
-  # Tabel interaktif dengan Kolom Checkbox Status yang dipaksa muncul di paling kanan/depan
+  # Tabel interaktif dengan Kolom Checkbox Status
   edited_df = st.data_editor(
       df,
       use_container_width=True,
