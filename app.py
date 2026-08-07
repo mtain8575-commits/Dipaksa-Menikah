@@ -39,7 +39,6 @@ def load_data(sheet_name):
     df = df.loc[:, df.columns.notna()]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Bersihkan baris Set Category
     for idx, row in df.iterrows():
       val_no = str(row.get("No", ""))
       if "SET CATEGORY" in val_no or "SET CA" in val_no:
@@ -53,7 +52,6 @@ def load_data(sheet_name):
           else:
             df.loc[idx, c] = ""
 
-    # PAKSA TAMBAHKAN KOLOM STATUS JIKA BELUM ADA
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -94,7 +92,6 @@ if df is not None and not df.empty:
   st.markdown("---")
   st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
-  # Tabel interaktif dengan Kolom Checkbox Status
   edited_df = st.data_editor(
       df,
       use_container_width=True,
