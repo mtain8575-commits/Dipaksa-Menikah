@@ -19,7 +19,7 @@ pilihan_menu = st.selectbox(
 # -------------------------------------------------------------
 SHEET_URLS = {
     "Master Schedule": "LINK_CSV_MASTER_SCHEDULE_ANDA",
-    "Day 1": "LINK_CSV_DAY_1_ANDA",
+    "Day 1": "LINK_CSV_LINK_ANDA_DISINI",
     "Day 2": "LINK_CSV_DAY_2_ANDA",
     "Day 3": "LINK_CSV_DAY_3_ANDA",
 }
