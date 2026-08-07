@@ -1,18 +1,14 @@
 import pandas as pd
 import streamlit as st
 
-# Konfigurasi halaman
 st.set_page_config(
-    page_title="Dashboard Breakdown Produksi", layout="wide"
+    page_title="Jadwal Dashboard & Breakdown Produksi", layout="wide"
 )
 
-# 1. JUDUL & SUBTITLE UTAMA
-st.markdown(
-    "### 🎬 Jadwal Dashboard & Breakdown Produksi"
-)  # Menggunakan markdown biasa agar bersih
+# 1. Judul & Header Utama ala Gambar 2
+st.markdown("### 🎬 Jadwal Dashboard & Breakdown Produksi")
 st.markdown("**Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)**")
 
-# Dropdown pilihan hari syuting
 pilihan_menu = st.selectbox(
     "Pilih Hari Syuting / Master Schedule",
     ["Master Schedule", "Day 1", "Day 2", "Day 3"],
@@ -63,7 +59,7 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Identifikasi baris scene valid (bukan baris kategori set)
+  # Hitung statistik
   scene_mask = (
       df["No"].notna()
       & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
@@ -81,13 +77,13 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # 2. Kotak Metrik Atas
+  # Metrik Atas
   col1, col2, col3 = st.columns(3)
   col1.metric(f"Keseluruhan Adegan ({pilihan_menu.upper()})", total_scene)
   col2.metric("Scene Sudah Take", sudah_take, delta="0%")
   col3.metric("Sisa Belum Take", belum_take, delta=f"-{belum_take}", delta_color="inverse")
 
-  # 3. Kotak Informasi Status Pimpinan Produksi (Pimpro)
+  # Info Pimpro
   if sudah_take == 0:
     st.info(
         "ℹ️ Status Pimpinan Produksi (Pimpro): Belum ada adegan yang dicentang"
@@ -101,7 +97,7 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # 4. Pilihan Cetak & Ekspor Laporan
+  # Tombol Unduh & Ekspor
   st.markdown("#### 🖨️ Pilihan Cetak & Ekspor Laporan")
   bcol1, bcol2, bcol3 = st.columns(3)
   with bcol1:
@@ -120,26 +116,66 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # 5. Rincian Jadwal Syuting & Checklist
-  st.markdown(f"#### 📋 Rincian Jadwal Syuting & Checklist - {pilihan_menu.upper()}")
+  # Bagian Rincian Jadwal & Checklist ala Gambar 2
+  st.markdown(
+      f"#### 📋 Rincian Jadwal Syuting & Checklist - {pilihan_menu.upper()}"
+  )
   st.caption("Centang kotak pada kolom Status jika adegan sudah selesai direkam:")
 
-  # Pindahkan kolom Status ke paling depan agar menjadi kotak centang utama
-  other_cols = [c for c in df.columns if c != "Status"]
-  df_display = df[["Status"] + other_cols]
+  # Render per kelompok Set Category seperti Gambar 2
+  current_category = "UMUM"
+  for idx, row in df.iterrows():
+    val_no = str(row.get("No", ""))
+    if "SET CATEGORY" in val_no or "SET CA" in val_no:
+      # Ambil teks kategori lengkap
+      cat_text = next(
+          (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
+          "SET CATEGORY",
+      )
+      current_category = cat_text
+      # Tampilkan Banner Kategori Set ala Gambar 2 (Kotak Biru/Abu Elegan)
+      st.markdown(
+          f"""
+            <div style="background-color: #1e293b; padding: 10px 15px; border-radius: 6px; border-left: 5px solid #3b82f6; margin-top: 15px; margin-bottom: 8px; font-weight: bold; color: #ffffff;">
+                📁 {current_category}
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+    elif val_no.strip() != "":
+      # Baris Adegan / Scene
+      sc_no = row.get("Scene", "")
+      nd = row.get("N/D", "")
+      page = row.get("Page(s)", "")
+      set_lok = row.get("SET", "")
+      cast = row.get("CAST", "")
+      property_val = row.get("PROPERTY", "")
 
-  # Tampilkan tabel interaktif dengan Checkbox
-  edited_df = st.data_editor(
-      df_display,
-      use_container_width=True,
-      hide_index=True,
-      column_config={
-          "Status": st.column_config.CheckboxColumn(
-              "Status",
-              help="Centang jika scene ini sudah selesai direkam",
-              default=False,
-          )
-      },
-  )
+      cols = st.columns([0.5, 1, 1, 1, 2.5, 2, 2.5])
+      with cols[0]:
+        # Checkbox interaktif untuk setiap scene
+        status_val = st.checkbox(
+            "",
+            value=bool(row.get("Status", False)),
+            key=f"chk_{pilihan_menu}_{idx}",
+        )
+        # Update status di dataframe jika dicentang
+        df.loc[idx, "Status"] = status_val
+      with cols[1]:
+        st.write(f"**{row.get('No', '')}**")
+      with cols[2]:
+        st.write(str(sc_no))
+      with cols[3]:
+        st.write(str(nd))
+      with cols[4]:
+        st.write(str(page))
+      with cols[5]:
+        st.write(str(set_lok))
+      with cols[6]:
+        st.write(str(property_val))
+      st.markdown(
+          "<hr style='margin: 4px 0px; border-color: #334155;'>",
+          unsafe_allow_html=True,
+      )
 else:
   st.error("❌ Gagal memuat data dari file Excel.")
