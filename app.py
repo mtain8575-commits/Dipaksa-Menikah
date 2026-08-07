@@ -5,7 +5,7 @@ st.set_page_config(
     page_title="Dashboard Monitoring Produksi", layout="wide"
 )
 
-# KOTAK MERAH: Bagian atas (Judul & Dropdown) - TIDAK BERUBAH
+# KOTAK MERAH: Bagian atas - TIDAK BERUBAH
 st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
 
 pilihan_menu = st.selectbox(
@@ -17,12 +17,10 @@ pilihan_menu = st.selectbox(
 @st.cache_data(ttl=10)
 def load_data(sheet_name):
   try:
-    # Baca file Excel mentah untuk mempertahankan baris Set Category (Kotak Hijau)
     raw_df = pd.read_excel(
         "Database_Jadwal_Produksi.xlsx", sheet_name=sheet_name, header=None
     )
 
-    # Cari baris header utama yang berisi 'Scene' atau 'No'
     header_row_index = None
     for idx, row in raw_df.iterrows():
       row_str = row.astype(str).values
@@ -33,7 +31,6 @@ def load_data(sheet_name):
         break
 
     if header_row_index is not None:
-      # Ambil baris nama kolom
       cols = raw_df.iloc[header_row_index].astype(str).str.strip().values
       raw_df.columns = cols
       df = raw_df.iloc[header_row_index + 1 :].copy()
@@ -43,9 +40,28 @@ def load_data(sheet_name):
     df = df.loc[:, df.columns.notna()]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Pastikan kolom Status (Kotak Kuning) tersedia
+    # Gabungkan teks baris Set Category agar terlihat utuh di satu baris penuh
+    for idx, row in df.iterrows():
+      val_no = str(row.get("No", ""))
+      if "SET CATEGORY" in val_no or "SET CA" in val_no:
+        # Ambil teks lengkap dari kolom pertama yang ada isinya
+        full_text = next(
+            (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
+            "SET CATEGORY",
+        )
+        df.loc[idx, "No"] = full_text
+        for c in df.columns[1:]:
+          df.loc[idx, c] = ""
+
+    # Ubah kolom Status menjadi format boolean (True/False) untuk kotak centang (Checkbox)
     if "Status" not in df.columns:
-      df["Status"] = "Belum Take"
+      df["Status"] = False
+    else:
+      df["Status"] = df["Status"].apply(
+          lambda x: True
+          if str(x).lower().strip() in ["sudah take", "true", "1", "sudah"]
+          else False
+      )
 
     df = df.reset_index(drop=True)
     return df
@@ -56,18 +72,18 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Hitung statistik berdasarkan data scene valid (mengabaikan baris kosong/kategori)
+  # Hitung statistik dari baris scene valid (bukan baris kategori)
   scene_df = df[
       df["No"].notna()
-      & ~df["No"].astype(str).str.contains("SET CATEGORY", na=False)
+      & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA", na=False)
+      & (df["No"].astype(str).str.strip() != "")
   ]
 
   total_scene = len(scene_df)
+  # Hitung berdasarkan kotak centang yang bernilai True
   sudah_take = len(
-      scene_df[
-          scene_df["Status"].astype(str).str.lower().str.contains("sudah", na=False)
-      ]
-  )
+      scene_df[scene_df["Status"] == True]
+  ) if "Status" in scene_df.columns else 0
   belum_take = total_scene - sudah_take
 
   st.markdown("---")
@@ -81,17 +97,16 @@ if df is not None and not df.empty:
   st.markdown("---")
   st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
-  # KOTAK HIJAU & KUNING: Tabel dengan Header Kategori Set & Kolom Checklist Status
+  # Tabel dengan Kotak Centang (Checkbox) di Kolom Status
   edited_df = st.data_editor(
       df,
       use_container_width=True,
       hide_index=True,
       column_config={
-          "Status": st.column_config.SelectboxColumn(
-              "Status Take",
-              help="Pilih status pengambilan gambar",
-              options=["Belum Take", "Sudah Take"],
-              required=True,
+          "Status": st.column_config.CheckboxColumn(
+              "Sudah Take",
+              help="Centang jika scene sudah selesai diambil gambarnya",
+              default=False,
           )
       },
   )
