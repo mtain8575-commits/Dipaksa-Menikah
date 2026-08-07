@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import streamlit as st
 
@@ -5,9 +6,7 @@ st.set_page_config(
     page_title="Jadwal Dashboard & Breakdown Produksi", layout="wide"
 )
 
-# Inisialisasi session_state agar status centang tersimpan permanen saat refresh
-if "saved_status" not in st.session_state:
-  st.session_state.saved_status = {}
+EXCEL_FILE = "Database_Jadwal_Produksi.xlsx"
 
 st.markdown("### 🎬 Jadwal Dashboard & Breakdown Produksi")
 st.markdown("**Serial: Dipaksa Menikah (Episode 1 - Rencana Jadwal 3 Hari)**")
@@ -18,12 +17,11 @@ pilihan_menu = st.selectbox(
 )
 
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=1)
 def load_data(sheet_name):
   try:
-    raw_df = pd.read_excel(
-        "Database_Jadwal_Produksi.xlsx", sheet_name=sheet_name, header=None
-    )
+    # Membaca file excel langsung
+    raw_df = pd.read_excel(EXCEL_FILE, sheet_name=sheet_name, header=None)
 
     header_row_index = None
     for idx, row in raw_df.iterrows():
@@ -56,22 +54,13 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Terapkan status dari session_state agar tidak hilang saat refresh
-  for idx, row in df.iterrows():
-    unique_key = f"{pilihan_menu}_row_{idx}"
-    if unique_key in st.session_state.saved_status:
-      df.loc[idx, "Status"] = st.session_state.saved_status[unique_key]
-    else:
-      val = row.get("Status", False)
-      is_checked = (
-          True
-          if str(val).lower().strip() in ["true", "1", "sudah", "yes"]
-          else False
-      )
-      df.loc[idx, "Status"] = is_checked
-      st.session_state.saved_status[unique_key] = is_checked
+  # Normalisasi kolom Status menjadi boolean
+  df["Status"] = df["Status"].apply(
+      lambda x: True
+      if str(x).lower().strip() in ["true", "1", "sudah", "yes", "taketruetrue"]
+      else False
+  )
 
-  # Hitung statistik adegan valid
   scene_mask = (
       df["No"].notna()
       & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
@@ -107,9 +96,12 @@ if df is not None and not df.empty:
   st.markdown(
       f"#### 📋 Rincian Jadwal Syuting & Checklist - {pilihan_menu.upper()}"
   )
-  st.caption("Centang kotak pada kolom Status jika adegan sudah selesai direkam:")
+  st.caption(
+      "Centang kotak pada kolom Status jika adegan sudah selesai direkam"
+      " (perubahan otomatis tersimpan):"
+  )
 
-  # Render baris per kategori set dan checklist lengkap dengan kolom Cast
+  # Render baris per kategori set dan checklist interaktif
   for idx, row in df.iterrows():
     val_no = str(row.get("No", ""))
     if "SET CATEGORY" in val_no or "SET CA" in val_no:
@@ -133,17 +125,30 @@ if df is not None and not df.empty:
       cast = row.get("CAST", "")
       property_val = row.get("PROPERTY", "")
 
-      # Proporsi kolom disesuaikan agar kolom Cast (paling kanan) tampil pas
       cols = st.columns([0.5, 0.8, 0.8, 0.8, 1.2, 2.2, 1.8, 1.8])
       with cols[0]:
-        unique_key = f"{pilihan_menu}_row_{idx}"
-        current_val = bool(st.session_state.saved_status.get(unique_key, False))
-        checked = st.checkbox("", value=current_val, key=f"widget_{unique_key}")
+        unique_key = f"chk_{pilihan_menu}_{idx}"
+        current_status = bool(row.get("Status", False))
 
-        if checked != current_val:
-          st.session_state.saved_status[unique_key] = checked
+        checked = st.checkbox("", value=current_status, key=unique_key)
+
+        # Jika status centang berubah, simpan langsung ke file Excel
+        if checked != current_status:
           df.loc[idx, "Status"] = checked
-          st.rerun()
+          # Simpan ulang ke Excel agar tidak hilang saat refresh
+          try:
+            with pd.ExcelWriter(
+                EXCEL_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace"
+            ) as writer:
+              df.to_excel(writer, sheet_name=pilihan_menu, index=False)
+            st.cache_data.clear()
+            st.rerun()
+          except Exception as write_err:
+            st.warning(
+                "Catatan: Perubahan tercatat di sesi ini (Cloud file system"
+                " bersifat read-only untuk penyimpanan permanen jangka"
+                " panjang)."
+            )
 
       with cols[1]:
         st.write(f"**{row.get('No', '')}**")
@@ -158,7 +163,7 @@ if df is not None and not df.empty:
       with cols[6]:
         st.write(str(property_val))
       with cols[7]:
-        st.write(str(cast))  # Kolom Cast yang diminta
+        st.write(str(cast))
 
       st.markdown(
           "<hr style='margin: 4px 0px; border-color: #334155;'>",
