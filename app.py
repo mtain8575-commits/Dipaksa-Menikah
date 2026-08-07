@@ -5,7 +5,6 @@ st.set_page_config(
     page_title="Dashboard Monitoring Produksi", layout="wide"
 )
 
-# KOTAK MERAH: Bagian atas - TIDAK BERUBAH
 st.markdown("### 📋 Dashboard Monitoring Produksi - Rincian Jadwal & Checklist")
 
 pilihan_menu = st.selectbox(
@@ -40,20 +39,22 @@ def load_data(sheet_name):
     df = df.loc[:, df.columns.notna()]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Gabungkan teks baris Set Category agar terlihat utuh di satu baris penuh
+    # Bersihkan baris Set Category agar tidak ada tulisan None di kolom lain
     for idx, row in df.iterrows():
       val_no = str(row.get("No", ""))
       if "SET CATEGORY" in val_no or "SET CA" in val_no:
-        # Ambil teks lengkap dari kolom pertama yang ada isinya
         full_text = next(
             (str(val) for val in row.values if pd.notna(val) and str(val).strip() != ""),
             "SET CATEGORY",
         )
-        df.loc[idx, "No"] = full_text
-        for c in df.columns[1:]:
-          df.loc[idx, c] = ""
+        # Masukkan teks kategori ke kolom No dan kosongkan kolom lainnya secara bersih
+        for c in df.columns:
+          if c == "No":
+            df.loc[idx, c] = f"📌 {full_text}"
+          else:
+            df.loc[idx, c] = ""
 
-    # Ubah kolom Status menjadi format boolean (True/False) untuk kotak centang (Checkbox)
+    # Pastikan kolom Status berupa boolean untuk Checkbox
     if "Status" not in df.columns:
       df["Status"] = False
     else:
@@ -72,15 +73,14 @@ def load_data(sheet_name):
 df = load_data(pilihan_menu)
 
 if df is not None and not df.empty:
-  # Hitung statistik dari baris scene valid (bukan baris kategori)
+  # Hitung statistik dari baris scene valid
   scene_df = df[
       df["No"].notna()
-      & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA", na=False)
+      & ~df["No"].astype(str).str.contains("SET CATEGORY|SET CA|📌", na=False)
       & (df["No"].astype(str).str.strip() != "")
   ]
 
   total_scene = len(scene_df)
-  # Hitung berdasarkan kotak centang yang bernilai True
   sudah_take = len(
       scene_df[scene_df["Status"] == True]
   ) if "Status" in scene_df.columns else 0
@@ -88,7 +88,7 @@ if df is not None and not df.empty:
 
   st.markdown("---")
 
-  # KOTAK MERAH: Metrik Atas
+  # Metrik Atas (Kotak Merah)
   col1, col2, col3 = st.columns(3)
   col1.metric("🎥 Total Scene", total_scene)
   col2.metric("✅ Sudah Take (Selesai)", sudah_take)
@@ -97,15 +97,15 @@ if df is not None and not df.empty:
   st.markdown("---")
   st.subheader(f"📍 Rincian Jadwal: {pilihan_menu}")
 
-  # Tabel dengan Kotak Centang (Checkbox) di Kolom Status
+  # Tabel Interaktif dengan Checkbox Status yang Jelas
   edited_df = st.data_editor(
       df,
       use_container_width=True,
       hide_index=True,
       column_config={
           "Status": st.column_config.CheckboxColumn(
-              "Sudah Take",
-              help="Centang jika scene sudah selesai diambil gambarnya",
+              "✅ Sudah Take",
+              help="Centang jika scene ini sudah selesai diambil",
               default=False,
           )
       },
