@@ -49,11 +49,20 @@ try:
     if state_key not in st.session_state:
         st.session_state[state_key] = {idx: False for idx in df_scenes.index}
     
-    # Pastikan semua indeks scene ada di session state
     for idx in df_scenes.index:
         if idx not in st.session_state[state_key]:
             st.session_state[state_key][idx] = False
-            
+
+    # Hitung jumlah yang sudah dichecklist secara real-time
+    completed_count = sum(1 for idx in df_scenes.index if st.session_state[state_key].get(idx, False))
+    remaining_count = total_scenes - completed_count
+    
+    # 📊 TAMPILAN REKAP / METRICS PROGRESS (KEMBALI DI ATAS)
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("Total Scene", total_scenes)
+    col_m2.metric("Sudah Take (Selesai)", completed_count)
+    col_m3.metric("Sisa Belum Take", remaining_count)
+    
     st.markdown("---")
 
     # ==========================================
@@ -113,9 +122,11 @@ try:
             
             with col_chk:
                 current_val = st.session_state[state_key].get(idx, False)
-                # Menggunakan on_change agar langsung merespon saat diklik
+                # Menggunakan on_change otomatis lewat re-run saat checkbox diklik
                 is_checked = st.checkbox("", value=current_val, key=f"chk_{pilihan_menu}_{idx}")
-                st.session_state[state_key][idx] = is_checked
+                if is_checked != current_val:
+                    st.session_state[state_key][idx] = is_checked
+                    st.rerun()
                 
             with col_scene:
                 st.text(str(row.get("Scene", "")))
@@ -131,14 +142,6 @@ try:
                 st.text(str(row.get("REMARK", "")))
                 
         st.markdown("---")
-
-    # Hitung jumlah yang sudah dichecklist secara real-time dari session state
-    completed_count = sum(1 for idx in df_scenes.index if st.session_state[state_key].get(idx, False))
-    remaining_count = total_scenes - completed_count
-
-    # Tampilkan Metrics / Rekap di bagian paling bawah atau kita tempatkan di atas via placeholder
-    # Agar metrik berada di atas, kita buat ulang di awal atau gunakan container.
-    # Mari kita tempatkan rekap di bagian bawah agar angkuhnya selalu sinkron sempurna dengan checkbox.
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memuat data: {e}")
